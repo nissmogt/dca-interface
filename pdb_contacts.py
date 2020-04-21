@@ -7,7 +7,7 @@ Functions for calculating a PDB distance matrix.
     pdb_map(pdbfilename, ['Chain A', 'Chain B'], distance cutoff)
         Returns:
 """
-# test commit text
+# dev branch test
 def get_residues(pdb_fn, chain_ids=None):
     import Bio.PDB
     import os
