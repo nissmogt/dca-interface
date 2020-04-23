@@ -53,7 +53,7 @@ def get_residues(pdbfile, chain_ids=None):
     return residues
 
 
-def calc_ha_distance(res_a, res_b):
+def calc_ha_distance(res_a, res_b, min_dist):
     """Calculate the Euclidean distance between a pair of heavy atoms
     Args:
         res_a: A ``Bio.PDB.Residue`` object.
@@ -62,7 +62,6 @@ def calc_ha_distance(res_a, res_b):
         The distance between ``res_a`` and ``res_b``.
     """
     import numpy as np
-    min_dist = 8.0
     for a in res_a.get_iterator():
         for b in res_b.get_iterator():
             coord_a = a.get_coord()
@@ -90,7 +89,7 @@ def calc_ca_distance(res_a, res_b):
     return dist
 
 
-def pdb_map(pdbfile, chain_ids, cutoff, ):
+def pdb_map(pdbfile, chain_ids, cutoff):
     import os
     from pandas import read_csv
     from itertools import combinations_with_replacement
@@ -115,7 +114,7 @@ def pdb_map(pdbfile, chain_ids, cutoff, ):
         # get chain id
         chain_a = res_a.get_parent().id
         chain_b = res_b.get_parent().id
-        dist = calc_ha_distance(res_a, res_b)
+        dist = calc_ha_distance(res_a, res_b, cutoff)
     #    if cutoff >= dist > 0:
         fileout.write("%d\t%d\t%f\t%s\t%s\n" % (i + 1, j + 1, dist, chain_a, chain_b))
 
