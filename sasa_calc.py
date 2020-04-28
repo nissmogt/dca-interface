@@ -138,7 +138,7 @@ def tpr_vs_sasa(pdb_file, dca_file, n_contacts, sasa_ratio_dict, threshold_sasa,
     ds = 10
     tpr = []
     start_time = time.time()
-    pdb_flat_matrix = vectorize_pdb_contacts(pdb_file, dimer_length, chain, calpha_cutoff)
+    pdb_flat_matrix = vectorize_pdb_contacts(pdb_file, dimer_length)
     pair_per_threshold = []
     for i in np.arange(0, threshold_sasa, ds):
 
@@ -177,7 +177,7 @@ def tpr_vs_sasa(pdb_file, dca_file, n_contacts, sasa_ratio_dict, threshold_sasa,
 
 
 def tpr_dca_sasa(pdb_flat_matrix, dca_file, number_of_contacts, sasa_file, threshold_sasa, dimer_length, chain, calpha_cutoff):
-    from dca_performance import loop_tpr
+    from dca_performance import tpr_top_pairs
     import time
     import numpy as np
     import matplotlib.pyplot as plt
@@ -192,8 +192,8 @@ def tpr_dca_sasa(pdb_flat_matrix, dca_file, number_of_contacts, sasa_file, thres
             print('len dca_sasa_ratio: ', len(dca_sasa_ratio))
 
             start_time2 = time.time()
-            tpr.append(loop_tpr(pdb_flat_matrix, new_dca_array, number_of_contacts,
-                                dimer_length, chain, calpha_cutoff))
+            tpr.append(tpr_top_pairs(pdb_flat_matrix, new_dca_array, number_of_contacts,
+                                     dimer_length, chain, calpha_cutoff))
             print("TPR LOOP: --- %s seconds ---" % (time.time() - start_time2))
         else:
             tpr.append(0)

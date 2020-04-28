@@ -13,5 +13,4 @@ dcafile = "files\\map_scan_XDHB_XDHC_CD.txt"
 pdbfile = "files\\XDHB_XDHC\\3hrd_CD_pdbfixed.pdb"
 dca_array = np.loadtxt(dcafile, usecols=(0, 1), dtype=int)
 
-
-plot_performance(pdbfile, dca_array, n_contacts, L, chain, cutoff)
+plot_performance(pdbfile, dca_array, n_contacts, L, chain)
