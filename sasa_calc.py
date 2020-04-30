@@ -92,7 +92,7 @@ def sasa_affect_plot(dca_file, number_of_contacts, sasa_file, threshold_list):
     plt.show()
 
 
-def calc_sasa(pdbfile):
+def calc_sasa(pdbfile, chains):
     import freesasa as fs
     import numpy as np
     structure = fs.Structure(pdbfile)
@@ -106,20 +106,21 @@ def calc_sasa(pdbfile):
     res_sasa = []
     atomcount = 0
     for i in range(structure.nAtoms()):
-        atom_name = structure.atomName(i)
-        res_name.append(structure.residueName(i))
+        if structure.chainLabel(i) in chains:
+            atom_name = structure.atomName(i)
+            res_name.append(structure.residueName(i))
 
-        if i != 0:
-            if res_name[i] == res_name[i - 1]:
-                atomcount += 1
-            else:
-                res_sasa.append(sum(sasa))
-                #             print("Total SASA: %f for %d atoms for %s" % (sasa_avg, atomcount, res_name[i-1]))
-                sasa_avg = 0
-                atomcount = 0
-                sasa = []
-        sasa.append(result.atomArea(i))
-    #     print(structure.chainLabel(i), atom_name)
+            if i != 0:
+                if res_name[i] == res_name[i - 1]:
+                    atomcount += 1
+                else:
+                    res_sasa.append(sum(sasa))
+                    #             print("Total SASA: %f for %d atoms for %s" % (sasa_avg, atomcount, res_name[i-1]))
+                    sasa_avg = 0
+                    atomcount = 0
+                    sasa = []
+            sasa.append(result.atomArea(i))
+            print(structure.chainLabel(i), atom_name)
     res_sasa_array = np.array(res_sasa)
 
     print("Total : %.2f A2" % result.totalArea())

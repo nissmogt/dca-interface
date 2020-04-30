@@ -19,10 +19,17 @@ def get_pdb(pdb_list):
 
     print("Downloading in %s:\n" % out_dir)
     for ids in pdb:
-        print('%s' % ids)
+        print('%s' % ids[:4])
         pdbl = PDBList()
-        pdbl.retrieve_pdb_file(ids, file_format='pdb', pdir=out_dir)
-    return pdbl
+        pdbl.retrieve_pdb_file(ids[:4], file_format='pdb', pdir=out_dir)
+
+
+def rename_pdb(pdb_dir):
+    for p in glob.glob(pdb_dir + "*.pdb"):
+        old = p
+        tmp = os.path.basename(p).strip(".pdb").upper()
+        new = "{}{}.pdb".format(pdb_dir, tmp)
+        os.rename(old, new)
 
 
 def get_lengths_seq(pdbid_list, id_chain_dict):
@@ -99,33 +106,79 @@ def make_list(msa_dir):
     return pdb_id_list, id_chain_dict
 
 
-def cat_seq(msa_name, msa_directory, pdb_directory, get_length=None):
+def read_length_file(msa_name):
+    import csv
+    print("\treading lengths...")
+    with open('lengths.csv', 'r', newline='\n') as csvfile:
+        r = csv.reader(csvfile)
+        for row in r:
+            if msa_name == row[0]:
+                length_a = int(row[2]) + 1
+    print("\tlength of first chain: {}".format(length_a))
+    return length_a
+
+
+def separate_monomer(pdbfile, chain_id):
+    import Bio.PDB
+    import os
+
+    class ChainSelect(Bio.PDB.Select):
+        def accept_chain(self, chain):
+            if chain.get_id() == chain_id:
+                return 1
+
+            else:
+                return 0
+
+    pdbid = (os.path.basename(pdbfile)).strip(".pdb")
+    dir_name = os.path.dirname(pdbfile)
+    p = Bio.PDB.PDBParser()
+    structure = p.get_structure(pdbid, pdbfile)
+    io = Bio.PDB.PDBIO()
+    io.set_structure(structure)
+    io.save("{}\\mon\\mon_{}_{}.pdb".format(dir_name, pdbid, chain_id), ChainSelect())
+    print("-- Saved to PDB -- PDBid: {}\tChain: {}\n".format(pdbid, chain_id))
+
+
+def batch_separate_monomer(msa_dir):
+    import glob
+    import os
+
+    pl, id_dict = make_list(msa_dir)
+    for key in id_dict.keys():
+        pdbid = key[:4]
+        for ch in id_dict[key]:
+            print("Separating {}{}.pdb into chain {}".format(pdb_directory, pdbid, ch))
+            separate_monomer("{}{}.pdb".format(pdb_directory, pdbid), ch)
+
+
+def cat_seq(msa_name, msa_dir, pdb_dir, get_length=None):
     """
     Concatenates PDB sequences
     :param msa_name:
-    :param msa_directory:
-    :param pdb_directory:
+    :param msa_dir:
+    :param pdb_dir:
     :param get_length:
     :return:
     """
     fname = "(cat_seq)"
     logging.info(fname + "\tcat-ting sequences...")
     # Get lengths of first chain for all msa files
-    list_ids, pdbid_chain_dict = make_list(msa_directory)  # outputs pdbid and chains of each msa
+    list_ids, pdbid_chain_dict = make_list(msa_dir)  # outputs pdbid and chains of each msa
     # writes file of pdbid and length of first chain and pdb fasta file
     if get_length:
         get_lengths_seq(list_ids, pdbid_chain_dict)
     # length_file = 'lengths.csv'
 
     # Create MSA-seq-template file object
-    msa_file_obj = open(msa_directory + msa_name + '.fas', 'r')
+    msa_file_obj = open(msa_dir + msa_name + '.fas', 'r')
     msa_header = msa_file_obj.readline().rstrip()
     msa_seq = msa_file_obj.readline().rstrip()
     msa_file_obj.close()
 
     # Create PDB fasta file object
     logging.info(fname + "\t\tFasta file\tNumber of chains")
-    fasta_file = pdb_directory + msa_name[:4] + '.fasta'
+    fasta_file = pdb_dir + msa_name[:4] + '.fasta'
     fasta_file_obj = open(fasta_file, 'r')
     num_of_chains = int(fasta_file_obj.read().count('\n') / 2)
     fasta_file_obj.seek(0)  # return to top of file
@@ -240,7 +293,7 @@ def apply_map(dca_array, map_dictionary, dca_start):
     import numpy as np
     map_dca_list = []
     for i, j, score in dca_array:
-        if i-1 >= dca_start and j-1 >= dca_start:
+        if i - 1 >= dca_start and j - 1 >= dca_start:
             map_index_i = map_dictionary[int(i) - 1]
             map_index_j = map_dictionary[int(j) - 1]
             map_dca_list.append([map_index_i, map_index_j, score])
@@ -248,7 +301,6 @@ def apply_map(dca_array, map_dictionary, dca_start):
     return map_dca_array
 
 
-# dev branch test
 def get_residues(pdbfile, chain_ids=None):
     import Bio.PDB
     import os
@@ -301,6 +353,8 @@ def calc_ha_distance(res_a, res_b, min_dist=8.0):
         :return: Minimum distance between heavy atoms
     """
     import numpy as np
+    import time
+    start_time = time.time()
     for a in res_a.get_iterator():
         for b in res_b.get_iterator():
             coord_a = a.get_coord()
@@ -308,7 +362,6 @@ def calc_ha_distance(res_a, res_b, min_dist=8.0):
             dist = np.linalg.norm(coord_a - coord_b)
             if dist < min_dist:
                 min_dist = dist
-
     return min_dist
 
 
@@ -319,6 +372,7 @@ def calc_ca_distance(res_a, res_b):
     :return: Distance between CA atoms
     """
     import numpy as np
+    print("calculating CA-CA distances...")
     a = res_a["CA"].get_coord()
     b = res_b["CA"].get_coord()
     dist = np.linalg.norm(a - b)
@@ -349,16 +403,91 @@ def pdb_map(pdbfile, chain_ids, cutoff):
         res_a = residues[i]
         res_b = residues[j]
         # get chain id
-        chain_a = res_a.get_parent().id
-        chain_b = res_b.get_parent().id
-        dist = calc_ca_distance(res_a, res_b)
-        if cutoff >= dist > 0.0:
-            fileout.write("%d\t%d\t%f\t%s\t%s\n" % (i + 1, j + 1, dist, chain_a, chain_b))
+        if res_a.has_id("CA") and res_b.has_id("CA"):
+            chain_a = res_a.get_parent().id
+            chain_b = res_b.get_parent().id
+            dist = calc_ca_distance(res_a, res_b)
+            if cutoff >= dist > 0.0:
+                fileout.write("%d\t%d\t%f\t%s\t%s\n" % (i + 1, j + 1, dist, chain_a, chain_b))
+        else:
+            print("{} NOTE! Res {} \n\tor {} not calculated! (missing CA)\n".format(fname, res_a.get_full_id(),
+                                                                                    res_b.get_full_id()))
 
-    print(fname + "\tloop time: %s" % (time.time() - start_time))
+    print(fname + "\t -- MAIN LOOP TIME -- %s" % (time.time() - start_time))
     # makes a pandas dataframe
     df_pdb = read_csv(filename, delim_whitespace=True)
     df_mon = df_pdb[df_pdb['chain_1'] == df_pdb['chain_2']]
     df_inter = df_pdb[df_pdb['chain_1'] != df_pdb['chain_2']]
 
     return df_pdb, df_mon, df_inter
+
+
+def plot_pdb_map(pdbfile, chains, cutoff, length_a, length, heatmap=None):
+    """
+
+    :param heatmap:
+    :param pdbfile:
+    :param chains:
+    :param cutoff:
+    :param length_a:
+    :param length:
+    :return:
+    """
+    import matplotlib.pylab as plt
+
+    print("starting pdb_map...")
+    df_pdb, df_mon, df_inter = pdb_map(pdbfile, chains, cutoff)
+    print("plotting...")
+    # Plotting
+    fig = plt.figure(figsize=(10, 10), dpi=100)
+    ax = fig.add_subplot(1, 1, 1)
+
+    # monomer
+    ax.scatter('i', 'j', data=df_mon, label='PDB monomer', c='xkcd:navy', cmap='coolwarm', marker='s')
+    # interface
+    ax.scatter('i', 'j', data=df_inter, label='PDB dimer', c='olive', cmap='Viridis', marker='s')
+
+    if heatmap:
+        # monomer
+        ax.scatter('i', 'j', data=df_mon, label='PDB monomer', c=df_mon['distance'], marker='s')
+        # interface
+        ax.scatter('i', 'j', data=df_inter, label='PDB dimer', c=df_inter['distance'], marker='s')
+
+    # Plot dimer separator line
+    plt.hlines(length_a, 0, length, linestyles='dashed', alpha=0.6)
+    plt.vlines(length_a, 0, length, linestyles='dashed', alpha=0.6)
+
+    # plot design
+    ax.legend(loc='lower right')
+    plt.minorticks_on()
+    plt.grid(alpha=0.3)
+    plt.xlabel("residue i"), plt.ylabel("residue j")
+    ax.grid(which='major', alpha=0.4, c='black')
+    ax.grid(which='minor', linestyle=':', alpha=0.5, c='gray')
+    plt.show()
+
+
+def test(pdbfile, cutoff, msa_name, msa_dir, pdb_dir):
+    """
+    Test function to debug pdb_map plot and function
+    :param pdb_dir:
+    :param msa_dir:
+    :param cutoff:
+    :param pdbfile:
+    :param msa_name:
+    :return:
+    """
+    full_seq, msa_seq, chains = cat_seq(msa_name, msa_dir, pdb_dir, get_length=False)
+    first_chain_length = read_length_file(msa_name)
+    length = len(full_seq)
+    plot_pdb_map(pdbfile, chains, cutoff, first_chain_length, length)
+
+
+pdb_directory = "PDB_benchmark_structures\\"
+msa_directory = "PDB_benchmark_alignments\\"
+c = 12
+mname = "1W85_A_1W85_B"
+pfile = "{}{}.cif".format(pdb_directory, mname[:4])
+# test(pfile, c, mname, msa_directory, pdb_directory)
+# l, i = make_list(msa_directory)
+# get_pdb(l)

@@ -1,6 +1,52 @@
+from sklearn.metrics import precision_score
 import numpy as np
-from sklearn.metrics import confusion_matrix, precision_score, recall_score, roc_curve
-from sklearn.metrics import precision_recall_curve, average_precision_score
+import logging
+
+
+def run_analysis(msa_name, n_pairs, cutoff, results_dir, msa_dir, pdb_dir, img_dir):
+    from plot_cm import plot_cm, draw_dca_tcl
+    from pdb import pdb_map, map_msa_to_pdb, cat_seq, cm_make, read_length_file
+    try:
+        vanilla_dca = '{}fn_{}_plmdca_rt1.txt'.format(results_dir, msa_name)
+        dca_score_matrix = '{}FNi_{}.txt'.format(results_dir, msa_name)
+
+        # Cat PDB chain seqs together and find msa to pdb alignment
+        print("\tcatting seqs...")
+        full_seq, msa_seq, chains = cat_seq(msa_name, msa_dir, pdb_dir, get_length=None)
+        print("\tcreating map...")
+        dca_indices, pdb_indices, map_to_dca, map_to_pdb = map_msa_to_pdb(full_seq, msa_seq)
+        total_length = len(pdb_indices)
+
+        # PDB contact map
+        pdbfile = "{}{}.cif".format(pdb_dir, msa_name[:3])
+        df_pdb, df_mon, df_inter = pdb_map(pdbfile, chains, cutoff)
+        pdb_df_list = [df_mon, df_inter]
+
+        # make contact map and apply backmapping
+        print("\tapplying map...")
+        df_umap = cm_make(dca_score_matrix)
+        df_map = cm_make(dca_score_matrix, map_to_pdb, dca_indices[-1])
+
+        # Get length of first chain
+        length_a = read_length_file(msa_name)
+
+        # Plot for a range of number of DCA pairs
+        step = 10
+        for i in range(10, n_pairs + step, step):
+            print("Plotting top {}...".format(i))
+            contact_map_file = "{}cm_FNi_{}.txt".format(results_dir, msa_name)
+            draw_dca_tcl(contact_map_file, i, length_a, chains)
+            plot_cm(pdb_df_list, df_umap, df_map, i, cutoff, length_a, total_length,
+                    img_dir=img_dir, gremlinfile=None, vanillafile=None, title="map_vs_umap", msa_name=msa_name)
+
+        # Plots TPR for top DCA predictions (compared to PDB interface pairs)
+        print("Plotting TPR...")
+        plot_performance(df_inter, df_map, n_pairs, total_length, msa_name, cutoff, img_dir=img_dir)
+        print("Finished analyzing {}".format(msa_name))
+
+    except OSError:
+        logging.debug("\t\t{}.fas has not been analysed.".format(msa_name))
+        print("\t\t{}.fas NOT analysed yet.".format(msa_name))
 
 
 def vectorize_dca_contacts(df_dca, dimer_length):
@@ -63,9 +109,10 @@ def tpr_top_pairs(pdb_flat_matrix, dca_df, n_contacts, dimer_length):
     return tpr_list
 
 
-def plot_performance(pdb_df, dca_df, n_contacts, dimer_length, msa_name=None, cutoff=None, atom="ca"):
+def plot_performance(pdb_df, dca_df, n_contacts, dimer_length, msa_name=None, cutoff=None, atom="ca", img_dir=None):
     """
     Plots True positive rate for each top DCA prediction
+    :param img_dir:
     :param pdb_df:
     :param dca_df:
     :param n_contacts:
@@ -79,12 +126,19 @@ def plot_performance(pdb_df, dca_df, n_contacts, dimer_length, msa_name=None, cu
 
     pdb_flat_array = vectorize_pdb_contacts(pdb_df, dimer_length)
     tpr_list = tpr_top_pairs(pdb_flat_array, dca_df, n_contacts, dimer_length)
+
     plt.figure(0)
-    plt.plot(range(len(tpr_list)), tpr_list)
+    plt.plot(range(1, n_contacts), tpr_list, label=msa_name)
+
+    plt.hlines(.5, 1, n_contacts, linestyles='dashed', alpha=0.6)
+    plt.vlines(20, 0, max(tpr_list), linestyles='dashed', alpha=0.6)
+
+    plt.title("{}-cutoff = {}".format(atom, cutoff))
     plt.xlabel('number of dca predictions')
     plt.ylabel('tpr')
     plt.grid(axis='both')
-    if msa_name:
-        img_dir = "C:\\Users\\kmehr\\Google Drive\\work\\images\\2020\\APR_2020\\Week_4\\"
+    plt.legend(loc='best')
+
+    if img_dir:
         imgname = "tpr_{}_top{}_{}{}.png".format(msa_name, n_contacts, atom, cutoff)
         plt.savefig(img_dir + imgname, dpi=500)

@@ -18,7 +18,7 @@ length_a = 291
 dimer_length = 452
 chain = ['C', 'D']
 
-plot_cm(pdb_file, dca_file, chain, n_contacts, cutoff)
+plot_cm(pdb_file, dca_file, chain, n_contacts, cutoff,,,
 
 # FDNI-YSAA Parameters
 # length_a = 217
