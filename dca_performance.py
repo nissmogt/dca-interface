@@ -3,11 +3,22 @@ import numpy as np
 import logging
 
 
-def run_analysis(msa_name, n_pairs, cutoff, results_dir, msa_dir, pdb_dir, img_dir):
+def run_analysis(msa_name, n_pairs, cutoff, results_dir, msa_dir, pdb_dir, img_dir, sasa_calc=False):
     from plot_cm import plot_cm, draw_dca_tcl
-    from pdb import pdb_map, map_msa_to_pdb, cat_seq, cm_make, read_length_file
+    from pdb import pdb_map, map_msa_to_pdb, cat_seq, cm_make, read_length_file, apply_map
+    # P2: There are a lot of redundancies that can be called once, saved to file and then read file
+    #  instead of running every time.
+    import pandas as pd
+    gremlin_dir = "gremlin\\"
+    #gremlin_file = "{}GRM_{}.txt_inter".format(gremlin_dir, msa_name)
+    #print("Gremlin {}".format(gremlin_file))
+    #df_gremlin = pd.read_csv(gremlin_file, delim_whitespace=True, names=['i', 'j', 'score'], usecols=(1, 2, 3), skiprows=2)
+
     try:
-        vanilla_dca = '{}fn_{}_plmdca_rt1.txt'.format(results_dir, msa_name)
+        vanilla_dca = '{}fn_{}_plmdca_rt2.txt'.format(results_dir, msa_name)
+        # df_vanilla = pd.read_csv(vanilla_dca, delimiter=',', names=['i', 'j', 'score'],
+        #                         usecols=(0, 1, 2))
+        # df_vanilla = df_vanilla.sort_values(ascending=False, by=['score'])
         dca_score_matrix = '{}FNi_{}.txt'.format(results_dir, msa_name)
 
         # Cat PDB chain seqs together and find msa to pdb alignment
@@ -18,17 +29,28 @@ def run_analysis(msa_name, n_pairs, cutoff, results_dir, msa_dir, pdb_dir, img_d
         total_length = len(pdb_indices)
 
         # PDB contact map
-        pdbfile = "{}{}.cif".format(pdb_dir, msa_name[:3])
+        pdbid = msa_name[:4]
+        pdbfile = "{}{}.cif".format(pdb_dir, pdbid)
         df_pdb, df_mon, df_inter = pdb_map(pdbfile, chains, cutoff)
         pdb_df_list = [df_mon, df_inter]
 
         # make contact map and apply backmapping
-        print("\tapplying map...")
-        df_umap = cm_make(dca_score_matrix)
-        df_map = cm_make(dca_score_matrix, map_to_pdb, dca_indices[-1])
+        # df_umap = cm_make(dca_score_matrix)
+        print("\tapplying map to {}...".format(dca_score_matrix))
+        df_map = cm_make(dca_score_matrix, map_to_pdb, dca_indices[0])
+        # vanilla_array = apply_map(df_vanilla.to_numpy(), map_to_pdb, dca_indices[0])
+        # df_map_v = pd.DataFrame(vanilla_array, columns=['i', 'j', 'score'])
+        #gremlin_array = apply_map(df_gremlin.to_numpy(), map_to_pdb, dca_indices[0])
+        #df_map_g = pd.DataFrame(gremlin_array, columns=['i', 'j', 'score'])
+        #df_map_g = df_map_g.sort_values(ascending=False, by=['score'])
 
         # Get length of first chain
         length_a = read_length_file(msa_name)
+
+        if sasa_calc:
+            # run sasa program
+            from sasa_calc import sasa_program
+            df_sasa_dca = sasa_program(df_map, n_pairs, pdbid, chains, cutoff, pdb_dir)
 
         # Plot for a range of number of DCA pairs
         step = 10
@@ -36,12 +58,13 @@ def run_analysis(msa_name, n_pairs, cutoff, results_dir, msa_dir, pdb_dir, img_d
             print("Plotting top {}...".format(i))
             contact_map_file = "{}cm_FNi_{}.txt".format(results_dir, msa_name)
             draw_dca_tcl(contact_map_file, i, length_a, chains)
-            plot_cm(pdb_df_list, df_umap, df_map, i, cutoff, length_a, total_length,
-                    img_dir=img_dir, gremlinfile=None, vanillafile=None, title="map_vs_umap", msa_name=msa_name)
+            plot_cm(pdb_df_list, df_map, i, cutoff, length_a, total_length, img_dir=img_dir, gremlin_pairs=None,
+                    vanillafile=None, title="DCAi", msa_name=msa_name)
 
         # Plots TPR for top DCA predictions (compared to PDB interface pairs)
         print("Plotting TPR...")
-        plot_performance(df_inter, df_map, n_pairs, total_length, msa_name, cutoff, img_dir=img_dir)
+        plot_performance(df_inter, df_map, n_pairs, total_length, msa_name, gremlin_pairs=None, sasa=None,
+                         cutoff=cutoff, img_dir=img_dir)
         print("Finished analyzing {}".format(msa_name))
 
     except OSError:
@@ -109,9 +132,12 @@ def tpr_top_pairs(pdb_flat_matrix, dca_df, n_contacts, dimer_length):
     return tpr_list
 
 
-def plot_performance(pdb_df, dca_df, n_contacts, dimer_length, msa_name=None, cutoff=None, atom="ca", img_dir=None):
+def plot_performance(pdb_df, dca_df, n_contacts, dimer_length, msa_name=None, gremlin_pairs=None, sasa=None,
+                     cutoff=None, atom="ca", img_dir=None):
     """
     Plots True positive rate for each top DCA prediction
+    :param sasa:
+    :param gremlin_pairs:
     :param img_dir:
     :param pdb_df:
     :param dca_df:
@@ -124,11 +150,18 @@ def plot_performance(pdb_df, dca_df, n_contacts, dimer_length, msa_name=None, cu
     """
     import matplotlib.pylab as plt
 
+    # make flat array of pdb and calculate tpr for top pairs
     pdb_flat_array = vectorize_pdb_contacts(pdb_df, dimer_length)
     tpr_list = tpr_top_pairs(pdb_flat_array, dca_df, n_contacts, dimer_length)
 
-    plt.figure(0)
+    plt.figure(0, figsize=(10, 10))
+    # -- DCA --
     plt.plot(range(1, n_contacts), tpr_list, label=msa_name)
+
+    # -- Gremlin --
+    #if not gremlin_pairs.empty:
+    #    tpr_list_g = tpr_top_pairs(pdb_flat_array, gremlin_pairs, n_contacts, dimer_length)
+    #    plt.plot(range(1, n_contacts), tpr_list_g, label="gremlin_{}".format(msa_name), linestyle="dashed")
 
     plt.hlines(.5, 1, n_contacts, linestyles='dashed', alpha=0.6)
     plt.vlines(20, 0, max(tpr_list), linestyles='dashed', alpha=0.6)
@@ -137,7 +170,7 @@ def plot_performance(pdb_df, dca_df, n_contacts, dimer_length, msa_name=None, cu
     plt.xlabel('number of dca predictions')
     plt.ylabel('tpr')
     plt.grid(axis='both')
-    plt.legend(loc='best')
+    plt.legend(loc='top-right')
 
     if img_dir:
         imgname = "tpr_{}_top{}_{}{}.png".format(msa_name, n_contacts, atom, cutoff)

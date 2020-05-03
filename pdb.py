@@ -25,6 +25,8 @@ def get_pdb(pdb_list):
 
 
 def rename_pdb(pdb_dir):
+    import glob
+    import os
     for p in glob.glob(pdb_dir + "*.pdb"):
         old = p
         tmp = os.path.basename(p).strip(".pdb").upper()
@@ -113,7 +115,7 @@ def read_length_file(msa_name):
         r = csv.reader(csvfile)
         for row in r:
             if msa_name == row[0]:
-                length_a = int(row[2]) + 1
+                length_a = int(row[2])
     print("\tlength of first chain: {}".format(length_a))
     return length_a
 
@@ -136,14 +138,11 @@ def separate_monomer(pdbfile, chain_id):
     structure = p.get_structure(pdbid, pdbfile)
     io = Bio.PDB.PDBIO()
     io.set_structure(structure)
-    io.save("{}\\mon\\mon_{}_{}.pdb".format(dir_name, pdbid, chain_id), ChainSelect())
+    io.save("{}\\mon_{}_{}.pdb".format(dir_name, pdbid, chain_id), ChainSelect())
     print("-- Saved to PDB -- PDBid: {}\tChain: {}\n".format(pdbid, chain_id))
 
 
-def batch_separate_monomer(msa_dir):
-    import glob
-    import os
-
+def batch_separate_monomer(msa_dir, pdb_directory):
     pl, id_dict = make_list(msa_dir)
     for key in id_dict.keys():
         pdbid = key[:4]
@@ -253,6 +252,7 @@ def map_msa_to_pdb(pdbseq, msaseq):
 def cm_make(score_matrix, map_dictionary=None, dca_start=None):
     """
     Makes a contact map from a DCA score matrix file. Also maps dca indices to pdb.
+    :param dca_start:
     :param score_matrix: Frobenius norm matrix
     :param map_dictionary: Optional: Dictionary of mapping
     :return: Three-column dataframe composed of pair i, j, and fn score
@@ -320,7 +320,7 @@ def get_residues(pdbfile, chain_ids=None):
         struct = parser.get_structure(pdb_id, pdbfile)
         model = struct[0]
     else:
-        print(fname + '\tprocessing .cif file...')
+        print(fname + '\tprocessing {} file...'.format(pdbfile))
         parser = Bio.PDB.MMCIFParser()
         struct = parser.get_structure(pdb_id, pdbfile)
         model = struct[0]
@@ -372,7 +372,7 @@ def calc_ca_distance(res_a, res_b):
     :return: Distance between CA atoms
     """
     import numpy as np
-    print("calculating CA-CA distances...")
+    # print("calculating CA-CA distances...")
     a = res_a["CA"].get_coord()
     b = res_b["CA"].get_coord()
     dist = np.linalg.norm(a - b)
@@ -387,7 +387,7 @@ def pdb_map(pdbfile, chain_ids, cutoff):
     fname = "(pdb_map)"
     pdbname = os.path.splitext(pdbfile)[0]
     # output filename
-    filename = pdbname + "_" + str(cutoff) + "A.txt"
+    filename = "{}_{}A.txt".format(pdbname, cutoff)
     fileout = open(filename, 'w')
     # write header for output file
     fileout.write("i\tj\td\tchain_1\tchain_2\n")
@@ -483,11 +483,11 @@ def test(pdbfile, cutoff, msa_name, msa_dir, pdb_dir):
     plot_pdb_map(pdbfile, chains, cutoff, first_chain_length, length)
 
 
-pdb_directory = "PDB_benchmark_structures\\"
-msa_directory = "PDB_benchmark_alignments\\"
-c = 12
-mname = "1W85_A_1W85_B"
-pfile = "{}{}.cif".format(pdb_directory, mname[:4])
-# test(pfile, c, mname, msa_directory, pdb_directory)
+#pdb_directory = "PDB_benchmark_structures\\"
+#msa_directory = "PDB_benchmark_alignments\\"
+#c = 12
+#mname = "1W85_A_1W85_B"
+#pfile = "{}{}.cif".format(pdb_directory, mname[:4])
+#test(pfile, c, mname, msa_directory, pdb_directory)
 # l, i = make_list(msa_directory)
 # get_pdb(l)

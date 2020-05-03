@@ -1,3 +1,20 @@
+def sasa_program(df_dca, n_pairs, pdbid, chains, cutoff, pdb_dir):
+    import numpy as np
+    sasa_list = []
+    threshold_sasa = 50
+    for ch in chains:
+        monomer_pdb = "{}mon_{}_{}.pdb".format(pdb_dir, pdbid, ch)
+        sasa_list.extend(calc_sasa(monomer_pdb))
+        print(monomer_pdb)
+
+    df_sasa_dca = sasa_filter(df_dca, n_pairs, np.array(sasa_list), threshold_sasa)
+
+    # Plot True positive rate as function of number of SASA-filtered DCA pairs
+    # tpr = tpr_dca_sasa(pdb_flat_matrix, dca_file, n_contacts, monomer_file,
+    #                   threshold_sasa, dimer_length, chain, calpha_cutoff)
+    return df_sasa_dca
+
+
 def delta_sasa(pdbfile_1, pdbfile_2):
     import numpy as np
     sasa_res, ratio_1 = np.genfromtxt(pdbfile_1, unpack=True, usecols=(1, 6), skip_header=1)
@@ -30,34 +47,36 @@ def process_sasa(sasa_file, *args):
     return dict(zip(sasa_res, ratio)), dict(zip(sasa_res, total_sasa))
 
 
-def sasa_filter(contact_file, number_of_contacts, sasa_file, sasa_cutoff):
+def sasa_filter(df_dca, n_contacts, sasa_array, sasa_cutoff):
     """
     SASA cutoff filter function that takes inputs and uses the cutoff
     to filter out DCA pairs that have a SASA ratio < cutoff.
 
-    :param contact_file: file in i,j,k column format
-    :param number_of_contacts: Integer - number of DCA pairs to include
-    :param sasa_file: GetArea Server output with footer removed
+    :param df_dca: file in i,j,k column format
+    :param n_contacts: int - number of DCA pairs to include
+    :param sasa_array: GetArea Server output with footer removed
     :param sasa_cutoff: Cutoff for SASA ratio or total
     :return: Numpy array of SASA-filtered DCA pairs
     """
+    import pandas as pd
     import numpy as np
-    res_i, res_j, dca_score = np.loadtxt(contact_file, unpack=True, usecols=(0, 1, 2))
-    sasa_ratio, sasa_total = process_sasa(sasa_file, 'dimer')
+    dca_array = df_dca.iloc[:, :3].to_numpy()
 
     dca_filtered_array = []
-    for i in range(number_of_contacts):
+    for i, j, dca_score in dca_array:
         try:
-            sasa_res_i = sasa_ratio[int(res_i[i])]
-            sasa_res_j = sasa_ratio[int(res_j[i])]
+            resi = int(i)
+            resj = int(j)
+            sasa_res_i = sasa_array[resi-1]
+            sasa_res_j = sasa_array[resj-1]
             if sasa_res_i >= sasa_cutoff and sasa_res_j >= sasa_cutoff:
-                dca_filtered_array.append([res_i[i], res_j[i], dca_score[i],
-                                           sasa_ratio[res_i[i]], sasa_ratio[res_j[i]]])
+                dca_filtered_array.append([resi, resj, dca_score,
+                                           sasa_array[resi], sasa_array[resj]])
         except KeyError as error:
             print("ERROR: check res: %s" % error.args[0])
 
     print("Number of DCA pairs above SASA cutoff of %s: %s%%\n" %
-          (sasa_cutoff, (len(dca_filtered_array) / float(number_of_contacts) * 100)))
+          (sasa_cutoff, (len(dca_filtered_array) / float(n_contacts) * 100)))
     return np.array(dca_filtered_array)
 
 
@@ -92,41 +111,51 @@ def sasa_affect_plot(dca_file, number_of_contacts, sasa_file, threshold_list):
     plt.show()
 
 
-def calc_sasa(pdbfile, chains):
+def calc_sasa(pdbfile):
     import freesasa as fs
     import numpy as np
+    import os
+    pdb_name = os.path.basename(pdbfile).strip(".pdb")
+    pdb_dir = os.path.dirname(pdbfile)
     structure = fs.Structure(pdbfile)
-    # result = fs.calc(structure)
+    print("Number of atoms of {}: {}".format(pdbfile, structure.nAtoms()))
     result = fs.calc(structure, fs.Parameters({'algorithm': fs.LeeRichards, 'n-slices': 150}))
     area_class = fs.classifyResults(result, structure)
 
     out = []
-    res_name = []
+    res_num = []
     sasa = []
     res_sasa = []
     atomcount = 0
     for i in range(structure.nAtoms()):
-        if structure.chainLabel(i) in chains:
-            atom_name = structure.atomName(i)
-            res_name.append(structure.residueName(i))
+        atom_name = structure.atomName(i)
+        res_num.append(structure.residueNumber(i))
+        # print("resnum {}".format(res_num))
 
-            if i != 0:
-                if res_name[i] == res_name[i - 1]:
-                    atomcount += 1
-                else:
-                    res_sasa.append(sum(sasa))
-                    #             print("Total SASA: %f for %d atoms for %s" % (sasa_avg, atomcount, res_name[i-1]))
-                    sasa_avg = 0
-                    atomcount = 0
-                    sasa = []
-            sasa.append(result.atomArea(i))
-            print(structure.chainLabel(i), atom_name)
-    res_sasa_array = np.array(res_sasa)
+        if i != 0:
+            # check if still in same residue
+            if res_num[i] == res_num[i - 1]:
+                atomcount += 1
+            # if new residue calculate total sasa of previous residue atoms and reset for next residue
+            else:
+                res_sasa.append(sum(sasa))
+                atomcount = 0
+                sasa = []
+                # print("lenSASA: {} atom {} for RES {} {} in chain {}".format(len(res_sasa), i-1,
+                #                                                             structure.residueName(i-1),
+                #                                                             res_num[i-1],
+                #                                                             structure.chainLabel(i-1)))
+        sasa.append(result.atomArea(i))
+
+    res_sasa_array = res_sasa
 
     print("Total : %.2f A2" % result.totalArea())
     for key in area_class:
         print(key, ": %.2f A2" % area_class[key])
 
+    outfile = "{}\\sasa_{}.txt".format(pdb_dir, pdb_name)
+    np.savetxt(outfile, res_sasa_array, delimiter="\n")
+    print("Number of residues in chain {}: {}".format(structure.chainLabel(i), len(res_sasa_array)))
     return res_sasa_array
 
 
@@ -177,7 +206,8 @@ def tpr_vs_sasa(pdb_file, dca_file, n_contacts, sasa_ratio_dict, threshold_sasa,
     plt.show()
 
 
-def tpr_dca_sasa(pdb_flat_matrix, dca_file, number_of_contacts, sasa_file, threshold_sasa, dimer_length, chain, calpha_cutoff):
+def tpr_dca_sasa(pdb_flat_matrix, dca_file, number_of_contacts, sasa_file, threshold_sasa, dimer_length, chain,
+                 calpha_cutoff):
     from dca_performance import tpr_top_pairs
     import time
     import numpy as np

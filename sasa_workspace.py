@@ -10,24 +10,16 @@ dca_file = 'files\\XDHB_XDHC\\map_cm_XDHB_XDHC.txt'
 monomer_file = 'files\\XDHB_XDHC\\sasa\\sasa_ps14_mon_3hrd_CD_pdbfixed.txt'
 
 # Filter DCA predictions using sasa dictionary
-n_contacts = 15
+n_pairs = 15
 threshold_sasa = [0, 1, 10, 50]
 cutoff = 10
 # XDHB-XDHC Parameters
 length_a = 291
 dimer_length = 452
-chain = ['C', 'D']
+chains = ['A', 'C']
 
-plot_cm(pdb_file, dca_file, chain, n_contacts, cutoff,,,
 
-# FDNI-YSAA Parameters
-# length_a = 217
-# dimer_length = 511
-# chain = ['C', 'B']
-# YBGJ-YBGK Parameters
-# length_a = 211
-# dimer_length = 501
-# chain = ['B', 'A']
+
 
 # tpr = []
 # pdb_flat_matrix = vectorize_pdb_contacts(pdb_file, dimer_length,
