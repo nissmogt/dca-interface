@@ -1,7 +1,7 @@
-def get_residues(msa, seq=False):
+def get_residues(msa_name, seq=False):
     """
     Build a simple list of residues from a single chain of a PDB file.
-    :param msa: String - MSA filename
+    :param msa_name: String - MSA filename
     :param seq: Boolean (Default: False) - Outputs sequence if True.
     :return: A list of Bio.PDB.Residue objects.
     """
@@ -11,7 +11,6 @@ def get_residues(msa, seq=False):
     from three2one import three2one
 
     pdb_path = "PDB_benchmark_structures\\"
-    msa_name = msa.strip(".fas")
     pdbfile = "{}.pdb".format(msa_name[:4])
     chain_ids = [msa_name.split("_")[1], msa_name.split("_")[3]]
     chain_lengths = []
@@ -48,7 +47,7 @@ def get_residues(msa, seq=False):
             else:
                 sys.stderr.write("WARNING: non-standard AA at %r%s" %
                                  (res.get_id(), os.linesep))
-        chain_lengths.append(num_residues)  # P1: BUG if runs twice, chain_length list will be twice as long.
+        chain_lengths.append(num_residues)
 
     if seq:
         sequence = three2one(sequence)

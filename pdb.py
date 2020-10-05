@@ -179,7 +179,7 @@ def cat_seq(msa_name, msa_dir, pdb_dir, get_length=None):
     logging.info(fname + "\t\tFasta file\tNumber of chains")
     fasta_file = pdb_dir + msa_name[:4] + '.fasta'
     fasta_file_obj = open(fasta_file, 'r')
-    num_of_chains = int(fasta_file_obj.read().count('\n') / 2)
+    num_of_chains = int(fasta_file_obj.read().count('>'))
     fasta_file_obj.seek(0)  # return to top of file
     # concatenate relevant chains
     fasta_header = []
@@ -266,14 +266,14 @@ def cm_make(score_matrix, map_dictionary=None, dca_start=None):
     basename = os.path.basename(filename)
     logging.info(fname + "\t\tScore matrix filename: %s" % filename)
     x_output = []
-    n = dca.shape[0]
-    logging.debug(fname + "\tshape of matrix: %s" % n)
-    for i in range(n - 1):
-        for j in range(i + 1, n):
+    len_matrix = dca.shape[0]
+    print(fname + "\tshape of matrix: %s" % len_matrix)
+    for i in range(len_matrix - 1):
+        for j in range(i + 1, len_matrix):
             x_output.append([i + 1, j + 1, dca[i, j]])
     dca_array = np.array(x_output)
     if map_dictionary and dca_start:
-        logging.debug(fname + "\t\tMap dictionary given - PROCEED with mapped contact map.")
+        print(fname + "\t\tMap dictionary given - PROCEED with mapped contact map.")
         map_dca_array = apply_map(dca_array, map_dictionary, dca_start)
         df_map_dca = pd.DataFrame(map_dca_array, columns=['i', 'j', 'score'])
         df_map_dca = df_map_dca.sort_values(ascending=False, by=['score'])
@@ -281,11 +281,11 @@ def cm_make(score_matrix, map_dictionary=None, dca_start=None):
         np.savetxt('results\\mapped_cm_' + basename + '.txt', df_map_dca, fmt='%d\t%d\t%f')
         return df_map_dca
     else:
-        logging.debug(fname + "\t\tNo map dictionary given - PROCEED with unmapped contact map.")
+        print(fname + "\t\tNo map dictionary given - PROCEED with unmapped contact map.")
         df_dca = pd.DataFrame(dca_array, columns=['i', 'j', 'score'])
         df_dca = df_dca.sort_values(ascending=False, by=['score'])
         logging.debug("sorted df_dca head {}".format(df_dca.head()))
-        np.savetxt('results\\cm_' + basename + '.txt', df_dca, fmt='%d\t%d\t%f')
+        np.savetxt('results\\unmapped_cm_' + basename + '.txt', df_dca, fmt='%d\t%d\t%f')
         return df_dca
 
 
@@ -293,7 +293,7 @@ def apply_map(dca_array, map_dictionary, dca_start):
     import numpy as np
     map_dca_list = []
     for i, j, score in dca_array:
-        if i - 1 >= dca_start and j - 1 >= dca_start:
+        if int(i) - 1 >= dca_start and int(j) - 1 >= dca_start:
             map_index_i = map_dictionary[int(i) - 1]
             map_index_j = map_dictionary[int(j) - 1]
             map_dca_list.append([map_index_i, map_index_j, score])
@@ -466,28 +466,3 @@ def plot_pdb_map(pdbfile, chains, cutoff, length_a, length, heatmap=None):
     ax.grid(which='minor', linestyle=':', alpha=0.5, c='gray')
     plt.show()
 
-
-def test(pdbfile, cutoff, msa_name, msa_dir, pdb_dir):
-    """
-    Test function to debug pdb_map plot and function
-    :param pdb_dir:
-    :param msa_dir:
-    :param cutoff:
-    :param pdbfile:
-    :param msa_name:
-    :return:
-    """
-    full_seq, msa_seq, chains = cat_seq(msa_name, msa_dir, pdb_dir, get_length=False)
-    first_chain_length = read_length_file(msa_name)
-    length = len(full_seq)
-    plot_pdb_map(pdbfile, chains, cutoff, first_chain_length, length)
-
-
-#pdb_directory = "PDB_benchmark_structures\\"
-#msa_directory = "PDB_benchmark_alignments\\"
-#c = 12
-#mname = "1W85_A_1W85_B"
-#pfile = "{}{}.cif".format(pdb_directory, mname[:4])
-#test(pfile, c, mname, msa_directory, pdb_directory)
-# l, i = make_list(msa_directory)
-# get_pdb(l)

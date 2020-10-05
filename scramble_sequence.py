@@ -1,13 +1,23 @@
-def split_header_seq(msa_file, len_a, limit=-1):
-    import numpy as np
-    """Function to split fasta headers and sequences"""
+import os
+import numpy as np
+
+
+def split_header_seq(msa_name, chain_length):
+    """
+    Function to split fasta headers and sequences
+
+    :param msa_name:
+    :param chain_length:
+    :return:
+    """
     header_a = []
     header_b = []
     seq_a = []
     seq_b = []
-    lines = open(msa_file, "r")
-    # next(lines)  # skips null template
-    # next(lines)
+    msadir = "PDB_benchmark_alignments\\"
+    lines = open("{}{}.fas".format(msadir, msa_name), "r")
+    next(lines)  # skips null template
+    next(lines)
     for idx, line in enumerate(lines):
         line = line.rstrip()  # removes whitespace from the right
         if line[0] == '>':
@@ -22,74 +32,74 @@ def split_header_seq(msa_file, len_a, limit=-1):
                 header_a.append(header_entry[1])
                 header_b.append(header_entry[2])
         else:
-            seq_a.append(line[:len_a])  # sequence A
-            seq_b.append(line[len_a:])  # sequence B
+            seq_a.append(line[:chain_length])  # sequence A
+            seq_b.append(line[chain_length:])  # sequence B
 
     lines.close()
     return np.array(header_a), np.array(header_b), np.array(seq_a), np.array(seq_b)
 
 
 def permute_index(n_seqs, n_replicates):
-    import numpy as np
     # creates 2 lists of random indices for seq A and B
     for seed in range(n_replicates):
-        r1 = np.random.RandomState(seed)
-        r2 = np.random.RandomState(seed + 2)
-        yield r1.permutation(n_seqs), r2.permutation(n_seqs)
+        R1 = np.random.RandomState(seed)
+        R2 = np.random.RandomState(seed + 2)
+        yield R1.permutation(n_seqs), R2.permutation(n_seqs)
 
 
-def scramble_sequence(msa_file, len_a, n_replicates):
-    import os
-    """Randomly pair sequences"""
-    msa_name = os.path.basename(msa_file)
-    header_a, header_b, seq_a, seq_b = split_header_seq(msa_file, len_a)
-    n_seqs = len(seq_b)
+def scramble_sequence(msa_name, n_replicates):
+    from get_region import get_dca_indices
+    from read_db import get_lengths
+    """
+
+    :param msa_name:
+    :param n_replicates:
+    :return:
+    """
+    if msa_name[0] == '1':
+        pdbid_start_number = 1
+    elif msa_name[0] == '2':
+        pdbid_start_number = 2
+    elif msa_name[0] == '3':
+        pdbid_start_number = 3
+    elif msa_name[0] == '4':
+        pdbid_start_number = 4
+    elif msa_name[0] == '5':
+        pdbid_start_number = 5
+
+    results_dir = "scrambled_sequences\\pdbid_{}\\{}\\".format(pdbid_start_number, msa_name[:4])
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+    print("\tScramble {}".format(msa_name))
+    chainId = msa_name[5:6]
+    uniprot_lengths = get_lengths(msa_name)
+    _, chain_length, _ = get_dca_indices(msa_name, uniprot_lengths[0])
+    print(chain_length[0], uniprot_lengths[0])
+    header_a, header_b, seq_a, seq_b = split_header_seq(msa_name, chain_length[0])
+    nSeqs = len(seq_b)
     # creates 2 lists of random indices for seq A and B
-    index = list(permute_index(n_seqs, n_replicates))
+    randomIndex = list(permute_index(nSeqs, n_replicates))
     outfile = []
     for rep in range(n_replicates):
         scramble_seq = []
         scramble_header = []
-        for i in range(n_seqs):
-            scramble_header.append(header_a[index[rep][0][i]] + '_' + header_b[index[rep][1][i]])
-            scramble_seq.append(seq_a[index[rep][0][i]] + seq_b[index[rep][1][i]])
-        scramble_msa = dict(zip(scramble_header, scramble_seq))
-
+        for i in range(nSeqs):
+            rand_index_1 = randomIndex[rep][0][i]
+            rand_index_2 = randomIndex[rep][1][i]
+            scramble_header.append(header_a[rand_index_1] + '_' + header_b[rand_index_2])
+            scramble_seq.append(seq_a[rand_index_1] + seq_b[rand_index_2])
+        scramble_msa_dict = dict(zip(scramble_header, scramble_seq))
         # Write MSA replicates to file
-        outfile.append(('MSA_rep%d_scrambled_' + msa_name) % rep)
+        outfile.append('{}{}_rep{}_scrambled.fas'.format(results_dir, msa_name, rep))
         with open(outfile[rep], 'w') as f:
-            for key in scramble_msa.keys():
-                f.write(">%s\n%s\n" % (key, scramble_msa[key]))
+            for key in scramble_msa_dict.keys():
+                f.write(">{}\n{}\n".format(key, scramble_msa_dict[key]))
     return outfile
 
 
-import shannon
-import numpy as np
-nr = 1
-len_a = 112
-id = '1EM8'
-c1 = 'D'
-c2 = 'C'
-# msa_directory = 'PDB_benchmark_alignments\\'
-msa_directory = 'Sequences\\'
-msa = msa_directory + '{}_{}_{}_{}.fas'.format(id, c1, id, c2)
-out = scramble_sequence(msa, len_a, nr)
-
-# Calc Shannon Entropy
-# aln, l_seq, ind = shannon.parseMSA(msa, alnformat='fasta', verbose=1)
-# la, gl = shannon.shannon_entropy_list_msa(aln)
-
-# Compute avg of entropy of scrambled seqs
-# array = []
-# for i in range(nr):
-#     scramble_msa = "MSA_rep{}_scrambled_{}_{}_{}_{}.fas".format(i, id, c1, id, c2)
-#     saln, sl_seq, sind = shannon.parseMSA(scramble_msa, alnformat='fasta', verbose=1)
-#     sla, sgl = shannon.shannon_entropy_list_msa(saln)
-#     array.append(sla)
-# avg_ent = np.average(array, axis=0)
-#
-# import ttest
-# ttest.shapiro_test(la, avg_ent)
-# p_t = ttest.f_test(la, avg_ent)
-# ttest.t_test(la, avg_ent, p_t, 0.05)
-# shannon.plot(ind, la, sla, verbose=1, msa_name='scramble_unscrambled_{}_{}_{}_{}'.format(id, c1, id, c2))
+# nr = 1
+# pdbid = '1WA5'
+# c1 = 'B'
+# c2 = 'C'
+# msa = '{}_{}_{}_{}'.format(pdbid, c1, pdbid, c2)
+# out = scramble_sequence(msa, nr)

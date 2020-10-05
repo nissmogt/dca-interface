@@ -1,103 +1,118 @@
-def calc_min_dist(res_a, res_b):
-    import numpy as np
-    dist = []
-    for atom_i in res_a:
-        for atom_j in res_b:
-            dist.append(np.linalg.norm(atom_i.get_coord() - atom_j.get_coord()))
-    dist_array = np.array(dist)
-    mindist = min(dist_array[np.nonzero(dist_array)])
-    return mindist
 
-
-def calc_ca_distance(res_a, res_b):
-    """
-    Calculates the distance between a pair of CA atoms
-    :param res_a: Biopython residue object - residue a
-    :param res_b: Biopython residue object - residue b
-    :return: Distance between CA atoms
-    """
-    import numpy as np
-    a = res_a["CA"].get_coord()
-    b = res_b["CA"].get_coord()
-    dist = np.linalg.norm(a - b)
-    return dist
-
-
-def distance_dca(msa, n_pairs, cutoff, all_atom=False):
+def distance_dca(df_dca, msa_name, atom, other_name=False):
     """
     Calculates distance matrix.
-    :param n_pairs:
-    :param all_atom:
+    :param other_name:
+    :param atom:
+    :param msa_name:
+    :param df_dca:
     :return: Three Dataframe objects.
     """
-    from Bio.PDB import is_aa
     import numpy as np
-    from pandas import read_csv
-    from itertools import combinations_with_replacement
     import time
     from get_residues import get_residues
+    from distance_functions import calc_ca_distance, calc_min_dist
 
     # PARAMS
     fname = "(DCA DISTANCE) "
+    print(fname)
     pdb_path = "PDB_benchmark_structures\\"
-    msa_name = msa.strip(".fas")
     chain_ids = [msa_name.split("_")[1], msa_name.split("_")[3]]
-    all_atom = False
 
-    if all_atom:
-        filename = "{}dca_heavy_atom_distance_matrix_{}_{}A.txt".format(pdb_path, msa_name, cutoff)
-    else:
-        filename = "{}dca_distance_matrix_{}_ca{}A.txt".format(pdb_path, msa_name, cutoff)
+    # output list of residues from pdb
+    residues, chain_lengths = get_residues(msa_name)
 
-    fileout = open(filename, 'w')
-    fileout.write("i\tj\tscore\td\tchain_1\tchain_2\n")
-
-    # LOAD DCA CONTACTS AND GET LIST OF ALL RESIDUES IN STRUCTURE
-    dca_residues = np.loadtxt("results\\mapped_cm_FNi_apc_{}.txt".format(msa_name))
-    residues = get_residues(msa)
-
-    # THIS CAN BE REMOVED IN the FUTURE
-    chain1_residues = []
-    chain2_residues = []
-    for res in residues:
-        if res.get_parent().id == chain_ids[0]:
-            if is_aa(res, standard=True):
-                chain1_residues.append(res)
-        elif res.get_parent().id == chain_ids[1]:
-            if is_aa(res, standard=True):
-                chain2_residues.append(res)
     # make each possible pairs of residues
+    n_pairs = len(df_dca)
     # pair_indices = combinations_with_replacement(range(len(residues)), 2)
-    pair_indices = dca_residues[:n_pairs]
+    pair_indices = np.array([df_dca["i"], df_dca["j"], df_dca["score"]]).transpose()
     start_time = time.time()
+    distance_list = []
+    chain_1_list = []
+    chain_2_list = []
+    atom_id_list = []
+    residue_list = []
+
     for i, j, score in pair_indices:
-        print(i, j)
-        res_a = residues[int(i)]
-        res_b = residues[int(j)]
-        # res_a = chain1_residues[int(i)]
-        # res_b = chain2_residues[int(j) - len(chain1_residues)]
-        # get chain id
-        if all_atom:
-            chain_a = res_a.get_parent().id
-            chain_b = res_b.get_parent().id
-            mindist = calc_min_dist(res_a, res_b)
-            if mindist <= cutoff:
-                fileout.write("%d\t%d\t%f\t%s\t%s\n" % (int(i), int(j), mindist, chain_a, chain_b))
+        # subtract index by one because index for residues begins at 0 and i,j start at 1
+        res_a = residues[int(i)-1]
+        res_b = residues[int(j)-1]
+        # get chain id and append to list
+        chain_1_list.append(res_a.get_parent().id)
+        chain_2_list.append(res_b.get_parent().id)
+        residue_list.append((res_a.resname, res_b.resname))
+        if atom == 'aa':
+            mindist, atom_ids = calc_min_dist(res_a, res_b)
+            distance_list.append(mindist)
+            atom_id_list.append(atom_ids)
         else:
             if res_a.has_id("CA") and res_b.has_id("CA"):
-                chain_a = res_a.get_parent().id
-                chain_b = res_b.get_parent().id
-                dist = calc_ca_distance(res_a, res_b)
-                if cutoff >= dist > 0.0:
-                    fileout.write("%d\t%d\t%f\t%f\t%s\t%s\n" % (int(i), int(j), score, dist, chain_a, chain_b))
-                else:
-                    print("{} NOTE! Res {} \n\tor {} not calculated! (missing CA)\n".format(fname,
-                                                                                            res_a.get_full_id(),
-                                                                                            res_b.get_full_id()))
-    fileout.close()
+                distance_list.append(calc_ca_distance(res_a, res_b))
+            else:
+                print("{} NOTE! Res {} \n\tor {} not calculated! (missing CA)\n".format(fname, res_a.get_full_id(),
+                                                                                        res_b.get_full_id()))
+    # fileout.close()
     print("{}\t -- MAIN LOOP TIME -- {}".format(fname, time.time() - start_time))
-    # Load data into a pandas dataframe
-    df_pdb = read_csv(filename, delim_whitespace=True)
-    df_mon = df_pdb[df_pdb['chain_1'] == df_pdb['chain_2']]
-    df_inter = df_pdb[df_pdb['chain_1'] != df_pdb['chain_2']]
-    return df_inter
+
+    # Saves results to file depending on cutoff type (all atom or c-alpha)
+    if not other_name:
+        if atom == 'aa':
+            df_new = df_dca.assign(dist=distance_list, chain_1=chain_1_list, chain_2=chain_2_list,
+                                   resnames=residue_list, atom_id=atom_id_list)
+            outfile = "results\\FN_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
+            np.savetxt(outfile, df_new, header="i\tj\tscore\tdist_aa\tchain_1\tchain_2\tresnames\tatom_id",
+                       fmt='%d\t%d\t%f\t%f\t%s\t%s\t%s\t%s', comments='')
+        else:
+            df_new = df_dca.assign(dist=distance_list, chain_1=chain_1_list,
+                                   chain_2=chain_2_list, resnames=residue_list)
+            outfile = "results\\FN_{}_inter_mapped_ca_dist_top{}.txt".format(msa_name, n_pairs)
+            np.savetxt(outfile, df_new, header="i\tj\tscore\tdist_ca\tchain_1\tchain_2\tresnames",
+                       fmt='%d\t%d\t%f\t%f\t%s\t%s\t%s', comments='')
+    else:
+        df_new = df_dca.assign(dist=distance_list, chain_1=chain_1_list, chain_2=chain_2_list,
+                               resnames=residue_list, atom_id=atom_id_list)
+        outfile = "scrambled_results\\FNi_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
+        np.savetxt(outfile, df_new, header="i\tj\tscore\tdist_aa\tchain_1\tchain_2\tresnames\tatom_id",
+                   fmt='%d\t%d\t%f\t%f\t%s\t%s\t%s\t%s', comments='')
+
+    return df_new
+
+
+def read_dca_distance_matrix(msa_name, n_pairs, atom, other_name=False):
+    from pandas import read_csv
+    if not other_name:
+        if atom:
+            filename = "results\\FN_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
+            df_dca = read_csv(filename, delimiter="\t")
+        else:
+            filename = "results\\FN_{}_inter_mapped_ca_dist_top{}.txt".format(msa_name, n_pairs)
+            df_dca = read_csv(filename, delimiter="\t")
+    else:
+        filename = "scrambled_results\\FNi_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
+        df_dca = read_csv(filename, delimiter="\t")
+
+    return df_dca[:n_pairs]
+
+
+def vectorize_dca_contacts(df_dca, pdb_total_length):
+    import numpy as np
+    """
+    Converts DCA pairs into binary matrix and then flattens into 1-D array
+    :param df_dca: Dataframe object - DCA pairs NOTE: Should already be sliced to desired length
+    :param dimer_length: int - Length of dimer
+    :return: 1-D flat array
+    """
+    import pandas
+    # Initialize contact matrices
+    dca_matrix = np.zeros((pdb_total_length, pdb_total_length))
+
+    dca_array = df_dca.iloc[:, :2].to_numpy()  # convert column i and j to numpy array
+    # Vectorize contact pairs into binary array of shape (L,L)
+    for i, j in dca_array:
+        dca_matrix[int(i)-1, int(j)-1] = 1
+    # Flatten binary array to shape (L*L) for use in confusion matrix
+    # Note: Index of pair(i,j) = L*i + j
+    dca_flat_matrix = dca_matrix.ravel()
+    return dca_flat_matrix
+
+

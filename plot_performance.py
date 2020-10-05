@@ -1,5 +1,5 @@
 import numpy as np
-from dca_performance import plot_performance
+from make_distance_matrix_dca_map import plot_performance
 
 # Static parameters
 n_contacts = 100

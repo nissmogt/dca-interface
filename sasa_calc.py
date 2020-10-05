@@ -160,7 +160,7 @@ def calc_sasa(pdbfile):
 
 
 def tpr_vs_sasa(pdb_file, dca_file, n_contacts, sasa_ratio_dict, threshold_sasa, dimer_length, chain, calpha_cutoff):
-    from dca_performance import vectorize_pdb_contacts, vectorize_dca_contacts
+    from make_distance_matrix_dca_map import vectorize_pdb_contacts, vectorize_dca_contacts
     from sklearn.metrics import precision_score
     import matplotlib.pyplot as plt
     import numpy as np
@@ -208,7 +208,7 @@ def tpr_vs_sasa(pdb_file, dca_file, n_contacts, sasa_ratio_dict, threshold_sasa,
 
 def tpr_dca_sasa(pdb_flat_matrix, dca_file, number_of_contacts, sasa_file, threshold_sasa, dimer_length, chain,
                  calpha_cutoff):
-    from dca_performance import tpr_top_pairs
+    from make_distance_matrix_dca_map import tpr_top_pairs
     import time
     import numpy as np
     import matplotlib.pyplot as plt
