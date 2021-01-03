@@ -59,21 +59,24 @@ def distance_dca(df_dca, msa_name, atom, other_name=False):
         if atom == 'aa':
             df_new = df_dca.assign(dist=distance_list, chain_1=chain_1_list, chain_2=chain_2_list,
                                    resnames=residue_list, atom_id=atom_id_list)
-            outfile = "results\\FN_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
-            np.savetxt(outfile, df_new, header="i\tj\tscore\tdist_aa\tchain_1\tchain_2\tresnames\tatom_id",
-                       fmt='%d\t%d\t%f\t%f\t%s\t%s\t%s\t%s', comments='')
+            # # outfile = "results\\FN_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
+            # outfile = "results\\FN_{}_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
+            # np.savetxt(outfile, df_new, header="i\tj\tscore\tdist_aa\tchain_1\tchain_2\tresnames\tatom_id",
+            #            fmt='%d\t%d\t%f\t%f\t%s\t%s\t%s\t%s', comments='')
         else:
             df_new = df_dca.assign(dist=distance_list, chain_1=chain_1_list,
                                    chain_2=chain_2_list, resnames=residue_list)
-            outfile = "results\\FN_{}_inter_mapped_ca_dist_top{}.txt".format(msa_name, n_pairs)
+            # outfile = "results\\FN_{}_inter_mapped_ca_dist_top{}.txt".format(msa_name, n_pairs)
+            outfile = "results\\FN_{}_mapped_ca_dist_top{}.txt".format(msa_name, n_pairs)
             np.savetxt(outfile, df_new, header="i\tj\tscore\tdist_ca\tchain_1\tchain_2\tresnames",
                        fmt='%d\t%d\t%f\t%f\t%s\t%s\t%s', comments='')
     else:
+        # outDir = "scrambled_results\\from_averaging_jmatrices\\"
         df_new = df_dca.assign(dist=distance_list, chain_1=chain_1_list, chain_2=chain_2_list,
                                resnames=residue_list, atom_id=atom_id_list)
-        outfile = "scrambled_results\\FNi_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
-        np.savetxt(outfile, df_new, header="i\tj\tscore\tdist_aa\tchain_1\tchain_2\tresnames\tatom_id",
-                   fmt='%d\t%d\t%f\t%f\t%s\t%s\t%s\t%s', comments='')
+        # outfile = "{}FNi_apc_{}_inter_mapped_aa_dist_top{}.txt".format(outDir, msa_name, n_pairs)
+        # np.savetxt(outfile, df_new, header="i\tj\tscore\tdist_aa\tchain_1\tchain_2\tresnames\tatom_id",
+        #            fmt='%d\t%d\t%f\t%f\t%s\t%s\t%s\t%s', comments='')
 
     return df_new
 
@@ -88,10 +91,11 @@ def read_dca_distance_matrix(msa_name, n_pairs, atom, other_name=False):
             filename = "results\\FN_{}_inter_mapped_ca_dist_top{}.txt".format(msa_name, n_pairs)
             df_dca = read_csv(filename, delimiter="\t")
     else:
-        filename = "scrambled_results\\FNi_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
+        # filename = "scrambled_results\\FNi_apc_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
+        filename = "scrambled_results\\fni_matrices\\FNi_apc_after_{}_inter_mapped_aa_dist_top{}.txt".format(msa_name, n_pairs)
         df_dca = read_csv(filename, delimiter="\t")
 
-    return df_dca[:n_pairs]
+    return df_dca
 
 
 def vectorize_dca_contacts(df_dca, pdb_total_length):

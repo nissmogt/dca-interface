@@ -1,62 +1,63 @@
 import matplotlib.pylab as plt
 from sklearn.metrics import precision_score, confusion_matrix
 from distance_dca import vectorize_dca_contacts
+img_dir = "C:\\Users\\kmehr\\OneDrive\\Documents\\phd_research\\images\\2020\\DEC_2020\\"
 
 
-def plot_true_positives(dca_df, atom, msa_name=None, cutoff=None):
-    """
-    Plots True positive rate for each top DCA prediction
-    :param dca_df:
-    :param msa_name:
-    :param cutoff:
-    :param atom:
-    :return:
-    """
-    img_dir = "C:\\Users\\kmehr\\OneDrive\\Documents\\phd_research\\images\\2020\\SEPT_2020\\true_positives_interface\\"
-    from numpy.random import randint
-
-    count = ord(msa_name[1]) * randint(500, 900) + ord(msa_name[2]) * randint(1001, 2000)
-    n_pairs = len(dca_df)
-    plt.figure(count, figsize=(10, 10))
-    # -- DCA --
-    plt.plot(range(1, n_pairs+1), dca_df["tp"][:n_pairs], label="{} Vanilla DCA interface".format(msa_name))
-
-    plt.title("{}-cutoff = {}".format(atom, cutoff))
-    plt.xlabel('ranked DCA pairs')
-    plt.ylabel('True positives')
-    plt.grid(axis='both')
-    plt.legend(loc='best')
-
-    imgname = "TP_inter_plmDCA_{}_top{}_{}{}.png".format(msa_name, n_pairs, atom, cutoff)
-    plt.savefig(img_dir + imgname, dpi=500, bbox_inches='tight')
-    # plt.show()
-    plt.close()
-
-
-def plot_tpr_as_function_of_pairs(n_pairs, tpr_unbinned, threshold, nSystems):
+def plot_tpr_as_function_of_pairs(n_pairs, true_positives_array, threshold, nSystems, fni=False):
     """
     Plot TPR as function of top ranked DCA pairs
 
+    :param fni:
     :param n_pairs:
-    :param tpr_unbinned:
+    :param true_positives_array:
     :param threshold:
     :param nSystems:
     :return:
     """
-    img_dir = "C:\\Users\\kmehr\\OneDrive\\Documents\\phd_research\\images\\2020\\SEPT_2020\\"
     from numpy.random import randint
-    plotNumber = randint(nSystems*n_pairs)
+    plotNumber = randint(nSystems * n_pairs)
     plt.figure(plotNumber)
-    plt.plot(range(n_pairs), tpr_unbinned, color='black', label='{}$\AA$'.format(threshold))
+    plt.plot(range(n_pairs), true_positives_array, color='black', label='{}$\AA$'.format(threshold))
     plt.xlabel("top ranked DCA intermonomer predictions")
     plt.ylabel("TPR")
-    imgname_tpr_vs_top_pairs = "TPR_as_function_top{}_pairs_{}systems_inter_plmDCA_aa{}.png".format(n_pairs, nSystems,
-                                                                                                    threshold)
+    if fni:
+        imgname_tpr_vs_top_pairs = "TPR_as_function_top{}_pairs_{}systems_FNi_inter_plmDCA_aa{}.png".format(n_pairs,
+                                                                                                            nSystems,
+                                                                                                            threshold)
+    else:
+        imgname_tpr_vs_top_pairs = "TPR_as_function_top{}_interface_pairs_{}systems_FN_plmDCA_aa{}.png".format(n_pairs,
+                                                                                                               nSystems,
+                                                                                                               threshold)
     plt.savefig(img_dir + imgname_tpr_vs_top_pairs, dpi=600, bbox_inches='tight')
     plt.close()
 
 
-def plot_tpr_as_function_of_scores(TPR_norm, binned_scores, width, n_pairs, threshold, nSystems):
+def compare_two_tpr(n_pairs, tpr_unbinned_1, tpr_unbinned_2, threshold, nSystems):
+    """
+    Plot TPR as function of top ranked DCA pairs
+
+    :param tpr_unbinned_2:
+    :param n_pairs:
+    :param tpr_unbinned_1:
+    :param threshold:
+    :param nSystems:
+    :return:
+    """
+    from numpy.random import randint
+    plotNumber = randint(nSystems * n_pairs)
+    plt.figure(plotNumber)
+    plt.plot(range(n_pairs), tpr_unbinned_1, color='black', label='FNi {}$\AA$'.format(threshold))
+    plt.plot(range(n_pairs), tpr_unbinned_2, color='xkcd:red', label='FN {}$\AA$'.format(threshold))
+    plt.xlabel("top ranked DCA intermonomer predictions")
+    plt.ylabel("fraction of dca pairs with cutoff <= {}$\AA$".format(threshold))
+    plt.legend(loc="best")
+    imgname_tpr_vs_top_pairs = "compare_TP FNi_FN_top{}_{}systems_aa{}.png".format(n_pairs, nSystems, threshold)
+    plt.savefig(img_dir + imgname_tpr_vs_top_pairs, dpi=600, bbox_inches='tight')
+    plt.close()
+
+
+def plot_tp_as_function_of_scores(TPR_norm, binned_scores, width, n_pairs, threshold, nSystems, fni=False):
     """
     Plot TPR vs Binned FN-apc scores
 
@@ -66,36 +67,91 @@ def plot_tpr_as_function_of_scores(TPR_norm, binned_scores, width, n_pairs, thre
     :param n_pairs:
     :param threshold:
     :param nSystems:
+    :param fni:
     :return:
     """
-    img_dir = "C:\\Users\\kmehr\\OneDrive\\Documents\\phd_research\\images\\2020\\SEPT_2020\\"
     from numpy.random import randint
-    plotNumber = randint(nSystems*n_pairs)
+    plotNumber = randint(nSystems * n_pairs)
     plt.figure(plotNumber)
-    plt.bar(binned_scores, TPR_norm, width=width, edgecolor="black", color="teal", alpha=0.7)
-    plt.xlabel("binned FN-apc scores")
-    plt.ylabel("TPR")
-    imgname_tpr_vs_binned_fn = "TPR_as_function_FN_dx{}_{}systems_inter_plmDCA_top{}_aa{}.png".format(width, nSystems,
-                                                                                                      n_pairs,
-                                                                                                      threshold)
-    plt.savefig(img_dir + imgname_tpr_vs_binned_fn, dpi=600, bbox_inches='tight')
-    # plt.show()
+    plt.bar(binned_scores, TPR_norm, width=width, align='edge', edgecolor="black", color="teal", alpha=0.7)
+    plt.ylabel("True Positives".format(threshold))
+
+    if fni:
+        plt.xlabel("FNi score")
+        imgname_tp_vs_binned_fn = "FNi_TP_as_function_dx{}_{}systems_inter_plmDCA_top{}_aa{}.png".format(width,
+                                                                                                           nSystems,
+                                                                                                           n_pairs,
+                                                                                                           threshold)
+    else:
+        plt.xlabel("FN scores")
+        imgname_tp_vs_binned_fn = "FN_TP_as_function_all_dx{}_{}systems_plmDCA_top{}_aa{}.png".format(width,
+                                                                                                              nSystems,
+                                                                                                              n_pairs,
+                                                                                                              threshold)
+    plt.savefig(img_dir + imgname_tp_vs_binned_fn, dpi=600, bbox_inches='tight')
+    # plt.xlim(0, 1.4)
+    # plt.ylim(0, 1)
+    plt.show()
     plt.close()
 
 
-def plot_npairs_as_function_of_scores(norm, binned_scores, width, n_pairs, threshold, nSystems):
+def plot_fp_as_function_of_scores(TPR_norm, binned_scores, width, n_pairs, threshold, nSystems, fni=False):
+    """
+    Plot TPR vs Binned FN-apc scores
+
+    :param TPR_norm:
+    :param binned_scores:
+    :param width:
+    :param n_pairs:
+    :param threshold:
+    :param nSystems:
+    :param fni:
+    :return:
+    """
+    from numpy.random import randint
+    plotNumber = randint(nSystems * n_pairs)
+    plt.figure(plotNumber)
+    plt.bar(binned_scores, TPR_norm, width=width, align='edge', edgecolor="black", color="purple", alpha=0.7)
+    plt.ylabel("False Positives".format(threshold))
+
+    if fni:
+        plt.xlabel("FNi scores")
+        imgname_fp_vs_binned_fn = "FNi_FP_as_function_dx{}_{}systems_inter_plmDCA_top{}_aa{}.png".format(width,
+                                                                                                           nSystems,
+                                                                                                           n_pairs,
+                                                                                                           threshold)
+    else:
+        plt.xlabel("FN scores")
+        imgname_fp_vs_binned_fn = "FN_FP_as_function_interface_dx{}_{}systems_plmDCA_top{}_aa{}.png".format(width,
+                                                                                                              nSystems,
+                                                                                                              n_pairs,
+                                                                                                              threshold)
+    # plt.savefig(img_dir + imgname_fp_vs_binned_fn, dpi=600, bbox_inches='tight')
+    plt.xlim(0, 1.4)
+    # plt.ylim(0, 1)
+    plt.show()
+    # plt.close()
+
+
+def plot_npairs_as_function_of_scores(norm, binned_scores, width, n_pairs, threshold, nSystems, fni=False):
     # Plot Normalization (eg Number of pairs) vs Binned FN-apc scores
-    img_dir = "C:\\Users\\kmehr\\OneDrive\\Documents\\phd_research\\images\\2020\\SEPT_2020\\"
     plt.figure(2)
-    plt.bar(binned_scores, norm, width=width, edgecolor="black", color="navy", alpha=0.7)
-    plt.yscale(value="log")
-    plt.xlabel("binned FN-apc scores")
-    plt.ylabel("number of pairs")
-    imgname_pairs_vs_fn = "number_of_pairs_as_function_FN_dx{}_{}systems_top{}_aa{}.png".format(width, nSystems,
-                                                                                                n_pairs, threshold)
-    plt.savefig(img_dir + imgname_pairs_vs_fn, dpi=600, bbox_inches='tight')
-    # plt.show()
-    plt.close()
+    plt.bar(binned_scores, norm, width=width, align='edge', edgecolor="black", color="navy", alpha=0.7, label="total contacts")
+    # plt.yscale(value="log")
+    plt.ylabel("P(TP)")
+    if fni:
+        plt.xlabel("binned FNi scores")
+        imgname_pairs_vs_fn = "FNi_pairs_as_function_dx{}_{}systems_top{}_aa{}.png".format(width, nSystems,
+                                                                                           n_pairs, threshold)
+    else:
+        plt.xlabel("binned FN-apc scores")
+        imgname_pairs_vs_fn = "FN_pairs_as_function_interface_dx{}_{}systems_top{}_aa{}.png".format(width, nSystems,
+                                                                                                    n_pairs, threshold)
+
+    plt.legend(loc='best')
+    # plt.savefig(img_dir + imgname_pairs_vs_fn, dpi=600, bbox_inches='tight')
+    plt.show()
+    # plt.close()
 
 
 def tpr_top_pairs(pdb_flat_matrix, dca_df, n_contacts, pdb_total_length):
@@ -138,5 +194,3 @@ def confusion_matrix_list(pdb_flat_matrix, dca_df, pdb_total_length):
             fn_list.append(fn)
             tn_list.append(tn)
     return tp_list, fp_list, fn_list, tn_list
-
-

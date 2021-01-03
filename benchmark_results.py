@@ -1,72 +1,52 @@
-import logging
-import pandas as pd
 import os
-import glob
-import time
+import pandas as pd
 from make_distance_matrix_dca_map import run_analysis
+from calculate_sasa import batch_calculate
+from draw_contacts import batch_draw
 from compare_new_model_with_old import compare_new_scrambled_with_paired
-from scramble_sequence import scramble_sequence
 
 
-def main(n_pairs, cutoff, batch=False, msa_name=None):
+def main(n_pairs, cutoff, resDir, matFile, msa_name=None):
     """
     Analyzes DCA results for every msa. Saves contact map and TPR plots to img_dir.
+    :param matFile:
     :param n_pairs: int - Number of DCA predictions
     :param cutoff: int - Contact map distance cutoff
-    :param batch: boolean - if True, runs analysis for all MSAs in msa_directory
+    :param resDir:
     :param msa_name: optional - str - Name of single MSA file. Used iff batch=False
-    :return: List of MSAs for DCA to run.
     """
-
-    # list of all MSAs in directory
-    msa_directory = 'PDB_benchmark_alignments\\'
-    msa_directory = 'PDB_benchmark_alignments\\'
-    pdb_directory = 'PDB_benchmark_structures\\'
-    results_directory = 'results\\'
-    msa_list = glob.glob('{}*.fas'.format(msa_directory))
-    length_file = "uniprot_lengths_pdbid_chains.csv"
-
-    # -- Batch run --
-    if batch:
-        count = 0
-        systemNames = []
-        start_time = time.time()
-        for msa_file in msa_list[:100]:
-            msa_name = os.path.basename(msa_file).strip(".fas")
-            if os.path.exists("scrambled_results\\matrix_ising_{}_rep0_scrambled.fas.mat".format(
-                    os.path.basename(msa_name))):
-            # if os.path.exists("results\\FN_{}.txt".format(os.path.basename(msa_file))):
-                if os.path.exists("PDB_benchmark_alignments\\a2m\\{}.a2m".format(msa_name)):
-                    count += 1
-                    print("CURRENTLY ON MSA: {} ({}/{})".format(msa_name, count, len(msa_list[:100])))
-                    # dca_df = run_analysis(msa_name, n_pairs, cutoff, results_directory)
-                    compare_new_scrambled_with_paired(msa_name, n_pairs, cutoff)
-                    # k = scramble_sequence(msa_name, n_replicates=5)
-                    # systemNames.append("{}.fas\n".format(msa_name))
-        # --END LOOP--
-        print("-- Total time to run: {} --".format(time.time() - start_time))
-        print("=" * 72)
-        # f = open("benchmark_systems_count{}.txt".format(count), 'w')
-        # f.writelines(systemNames)
-        # f.close()
-        return systemNames
-
-    # Single MSA run
-    else:
-        msa_name = os.path.basename(msa_name).strip(".fas")
-        # dca_df = run_analysis(msa_name, n_pairs, cutoff, results_directory)
-        dca_df = compare_new_scrambled_with_paired(msa_name, n_pairs, cutoff)
-        return dca_df
+    dca_df = run_analysis(msa_name, n_pairs, cutoff, resDir, matFile, fni=False, plot=False)
+    return dca_df
 
 
-if __name__ == '__main__':
-    n = 50
-    cut = 12
-    pdbid = '1GL2'
-    c1 = 'A'
-    c2 = 'D'
-    msa = '{}_{}_{}_{}.fas'.format(pdbid, c1, pdbid, c2)
-    # Single run
-    df_dca = main(n, cut, msa_name=msa)
-    # Run batch
-    # x = main(n, cut, batch=True)
+results_directory = ["nonbonded_restraints_results\\20A\\", "nonbonded_restraints_results\\15A\\",
+                     "nonbonded_restraints_results\\12A\\", "nonbonded_restraints_results\\8A\\",
+                     "sasa_restraints_results\\sasa_5\\", "vanilla_results\\"]
+
+matrix_directory = ["coupling_matrices\\nonbonded\\20A\\", "coupling_matrices\\nonbonded\\15A\\",
+                    "coupling_matrices\\nonbonded\\12A\\", "coupling_matrices\\nonbonded\\8A\\",
+                    "coupling_matrices\\sasa_restraints\\", "coupling_matrices\\vanilla\\"]
+
+dimers = ["1EM8_D_1EM8_C", "1FM0_E_1FM0_D", "1KA9_H_1KA9_F", "1ZT2_A_1ZT2_B", "2NQ2_C_2NQ2_A", "2OXG_Z_2OXG_Y",
+          "4NQW_A_4NQW_B", '5WY5_B_5WY5_A', '5L8H_B_5L8H_A', '5UNI_B_5UNI_A', '5F5S_A_5F5S_B',
+          '5MU7_B_5MU7_A', '5M72_A_5M72_B', 'HKRR_C_HKRR_A']
+# for rd in results_directory:
+#     print(results_directory)
+rd = results_directory[-1]
+m = matrix_directory[-1]
+if not os.path.exists(rd):
+    os.makedirs(rd)
+n = 100
+cut = 12
+# batch_calculate(calc_type='dca', result_dir=rd, inputList=dimers)
+# for i in range(11):
+i = -3
+msa = '{}'.format(dimers[i])
+matrix_file = "{}matrix_ising_{}.fas.mat".format(m, msa)
+df_dca = main(n, cut, resDir=rd, matFile=matrix_file, msa_name=msa)
+# output
+fn_dist_file_out = "{}FN_all_{}_mapped_aa_dist.txt".format(rd, msa.strip('.fas'))
+header = "i\tj\tfn_apc\tfn\tdist_aa\tui\tuj\tsi\tsj\tchain_1\tchain_2\tresnames\tatom_id"
+df_dca.to_csv(fn_dist_file_out, sep='\t', index=False, header=header, float_format='%.5f')
+
+# batch_draw(dimers, resDir=rd, nPairs=n)

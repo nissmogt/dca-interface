@@ -6,11 +6,8 @@ def distance_matrix(msa_name, all_atom=False):
     :param all_atom:
     :return: Three Dataframe objects.
     """
-    # msa = "3RPF_A_3RPF_D.fas"
-    # cutoff = 12
     import time
     import pandas as pd
-    import numpy as np
     from itertools import combinations_with_replacement
     from get_residues import get_residues
     from distance_functions import calc_min_dist, calc_ca_distance
@@ -66,48 +63,36 @@ def distance_matrix(msa_name, all_atom=False):
                                'si': actual_i_list, 'sj': actual_j_list, 'chain_1': chain_1_list,
                                'chain_2': chain_2_list, 'resnames': residue_list, 'atom_id': atom_id_list})
         filename = "{}heavy_atom_distance_matrix_{}.txt".format(out_path, msa_name)
-        np.savetxt(filename, df_pdb, header="i\tj\td\tsi\tsj\tchain_1\tchain_2\tresnames\tatom_id",
-                   fmt='%d\t%d\t%f\t%d\t%d\t%s\t%s\t%s\t%s', comments='')
+        header = "i\tj\tdist_aa\tsi\tsj\tchain_1\tchain_2\tresnames\tatom_id"
+        df_pdb.to_csv(filename, sep='\t', index=False, header=header, float_format='%.5f')
     else:
         df_pdb = pd.DataFrame({'i': resi_list, 'j': resj_list, 'd': distance_list,
                                'si': actual_i_list, 'sj': actual_j_list,
                                'chain_1': chain_1_list, 'chain_2': chain_2_list, 'resnames': residue_list})
         filename = "{}ca_distance_matrix_{}.txt".format(out_path, msa_name)
-        np.savetxt(filename, df_pdb, header="i\tj\td\tsi\tsj\tchain_1\tchain_2\tresnames",
-                   fmt='%d\t%d\t%f\t%d\t%d\t%s\t%s\t%s', comments='')
+        header = "i\tj\td\tsi\tsj\tchain_1\tchain_2\tresnames"
+        df_pdb.to_csv(filename, sep='\t', index=False, header=header, float_format='%.5f')
 
     print("{} wrote {}".format(fname, filename))
-    df_mon = df_pdb[df_pdb['chain_1'] == df_pdb['chain_2']]
-    df_inter = df_pdb[df_pdb['chain_1'] != df_pdb['chain_2']]
-    return df_pdb, df_mon, df_inter, chain_lengths
+    return df_pdb
 
 
-def read_distance_matrix_file(msa_name, all_atom=False):
+def import_pdb_distance_matrix(msa_name, all_atom=False):
     import os
     import pandas as pd
-    fname = "(read dist mat)"
+    fname = "(import distance matrix)"
     out_path = "distance_matrix\\"
-    c1 = msa_name.split("_")[1]
-    c2 = msa_name.split("_")[-1]
     if all_atom:
         filename = "{}heavy_atom_distance_matrix_{}.txt".format(out_path, msa_name)
     else:
         filename = "{}ca_distance_matrix_{}.txt".format(out_path, msa_name)
 
-    if os.stat(filename).st_size != 0:                          # checks if file is not empty
-        print("\t{} reading from {}".format(fname, filename))
-        df_pdb = pd.read_csv(filename, delimiter="\t")
-        df_mon = df_pdb[df_pdb['chain_1'] == df_pdb['chain_2']]
-        df_inter = df_pdb[df_pdb['chain_1'] != df_pdb['chain_2']]
-        total_length = max(df_mon[df_mon["chain_2"] == c2].j)
-        chain_1_length = max(df_mon[df_mon["chain_1"] == c1].j)
-        chain_2_length = total_length - chain_1_length
-    else:
-        df_pdb, df_mon, df_inter, chain_lengths = distance_matrix(msa_name, all_atom)
-    return df_mon, df_inter, [chain_1_length, chain_2_length]
+    print("\t{} reading from {}".format(fname, filename))
+    df_pdb = pd.read_csv(filename, delimiter="\t")
+    return df_pdb
 
 
-def plot_cm(pdb_df_list, cutoff, length_a, length, atom, df_dca, msa_name=None, other_dca=None):
+def plot_cm(pdb_df_list, cutoff, length_a, length, atom, df_dca, msa_name=None, other_dca=None, img_name=None):
     """
     :param df_dca:
     :param pdb_df_list:
@@ -141,13 +126,14 @@ def plot_cm(pdb_df_list, cutoff, length_a, length, atom, df_dca, msa_name=None, 
                label='{} dimer, {}$\AA$'.format(msa_name[:4], cutoff),
                c='xkcd:azure', marker='o', s=25, alpha=0.7)
 
-    # Vanilla DCA
     if not df_dca.empty:
+        import os
+        label_ = (os.path.basename(img_name)).strip(msa_name)
         ax.scatter('i', 'j', data=df_dca, label='Vanilla DCA interface top {}'.format(len(df_dca)), c='black', s=30)
 
     if not other_dca.empty:
-        ax.scatter('i', 'j', data=other_dca, label='DCAi scrambled top {}'.format(len(other_dca)),
-                   c='red', s=30, alpha=0.6)
+        ax.scatter('i', 'j', data=other_dca, label='DCAi top {}'.format(len(other_dca)),
+                   c='red', s=30, alpha=0.7)
 
     # Plot dimer separator line
     extend = 2
@@ -167,16 +153,14 @@ def plot_cm(pdb_df_list, cutoff, length_a, length, atom, df_dca, msa_name=None, 
     ax.grid(which='major', alpha=0.4, c='black')
     ax.grid(which='minor', linestyle=':', alpha=0.5, c='gray')
     if not df_dca.empty:
-        img_dir = "C:\\Users\\kmehr\\OneDrive\\Documents\\phd_research\\images\\2020\\SEPT_2020\\plmDCA_scrambled\\"
-        # imgname = "{}{}_top{}_{}{}.png".format(img_dir, msa_name, len(df_dca), atom, cutoff)
-        # imgname = "{}{}_top{}_inter_{}{}.png".format(img_dir, msa_name, len(df_dca), atom, cutoff)     # interface-only
-        imgname = "{}{}_top{}_FNi_{}{}.png".format(img_dir, msa_name, len(df_dca), atom, cutoff)     # FNi
+        imgname = "{}.png".format(img_name)     # FNi
     else:
+        # Dont change this unless you want pdb distance matrix in a new directory
         img_dir = "C:\\Users\\kmehr\\OneDrive\\Documents\\phd_research\\images\\2020\\SEPT_2020\\distance_matrix\\"
         imgname = "{}{}_len_{}_{}{}.png".format(img_dir, msa_name, length, atom, cutoff)
     plt.savefig(imgname, dpi=900, bbox_inches='tight')
-    plt.show()
-    # plt.close()
+    # plt.show()
+    plt.close()
 
 
 def vectorize_pdb_contacts(pdb_df, dimer_length):
