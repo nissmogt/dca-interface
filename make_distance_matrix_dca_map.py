@@ -55,7 +55,7 @@ def run_analysis(msa_name, n_pairs, cutoff, results_dir, matrix, fni=False, plot
 
     df_dca = process_coupling_matrix_output_scores(matrixFile=matrix, freqFile=False)
     df_dca_ranked = rank_hamming(df_dca)
-    df_dca_mapped = pipeline_mapping(msa_name, df_dca_ranked, read=True)
+    df_dca_mapped = pipeline_mapping(msa_name, df_dca_ranked, read=True, a2m=True)
     df_dca_mapped_dist = df_dca_mapped.merge(df_pdb, how='inner', on=['i', 'j'])
 
     # PLOTS PROTOCOL ==================================================================================================

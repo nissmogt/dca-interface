@@ -42,13 +42,13 @@ def pipeline_pdb_distance_matrix(msa_name, cutoff_type, cutoff, read=False, plot
     pdb_df_list = [df_pdb, df_mon, df_inter]
     if plot:
         df_empty = pd.DataFrame({'A': []})  # an empty Dataframe to use in plot_cm
-        plot_cm(pdb_df_list, cutoff=cutoff, length_a=chain1_length, length=total_length, atom=cutoff_type,
+        plot_cm(pdb_df_list[1:], cutoff=cutoff, length_a=chain1_length, length=total_length, atom=cutoff_type,
                 df_dca=df_empty, msa_name=msa_name, other_dca=df_empty)
 
     return pdb_df_list, [chain1_length, chain2_length, total_length]
 
 
-def pipeline_mapping(msa_name, df_dca, read=False):
+def pipeline_mapping(msa_name, df_dca, read=False, a2m=True):
     """
     Map DCA indices to PDB-distance-matrix indices
     :param read:
@@ -74,7 +74,10 @@ def pipeline_mapping(msa_name, df_dca, read=False):
 
     else:
         uniprot_lengths = get_lengths(msa_name)
-        _, dca_lengths, _ = get_dca_indices(msa_name, uniprot_lengths[0])
+        if a2m:
+            _, dca_lengths, _ = get_dca_indices(msa_name, uniprot_lengths[0])
+        else:
+            dca_lengths = uniprot_lengths
 
         # -- GET MAP FROM MSA TO PDB --
         pdbseq_1, pdbseq_2 = get_residues(msa_name, seq=True)
