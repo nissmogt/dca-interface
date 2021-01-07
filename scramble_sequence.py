@@ -15,6 +15,7 @@ def split_header_seq(msa_name, chain_length):
     seq_a = []
     seq_b = []
     msadir = "PDB_benchmark_alignments\\"
+    # msadir = "PDB_benchmark_alignments\\filtered\\"
     lines = open("{}{}.fas".format(msadir, msa_name), "r")
     next(lines)  # skips null template
     next(lines)
@@ -67,11 +68,10 @@ def scramble_sequence(msa_name, n_replicates):
     elif msa_name[0] == '5':
         pdbid_start_number = 5
 
-    results_dir = "scrambled_sequences\\pdbid_{}\\{}\\".format(pdbid_start_number, msa_name[:4])
+    results_dir = "scrambled_sequences_nots\\pdbid_{}\\{}\\".format(pdbid_start_number, msa_name)
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
     print("\tScramble {}".format(msa_name))
-    chainId = msa_name[5:6]
     uniprot_lengths = get_lengths(msa_name)
     _, chain_length, _ = get_dca_indices(msa_name, uniprot_lengths[0])
     print(chain_length[0], uniprot_lengths[0])
@@ -89,17 +89,21 @@ def scramble_sequence(msa_name, n_replicates):
             scramble_header.append(header_a[rand_index_1] + '_' + header_b[rand_index_2])
             scramble_seq.append(seq_a[rand_index_1] + seq_b[rand_index_2])
         scramble_msa_dict = dict(zip(scramble_header, scramble_seq))
-        # Write MSA replicates to file
+    #     Write MSA replicates to file
         outfile.append('{}{}_rep{}_scrambled.fas'.format(results_dir, msa_name, rep))
-        with open(outfile[rep], 'w') as f:
+        with open(outfile[rep], 'w', encoding='utf-8') as f:
             for key in scramble_msa_dict.keys():
                 f.write(">{}\n{}\n".format(key, scramble_msa_dict[key]))
     return outfile
 
 
-# nr = 1
-# pdbid = '1WA5'
-# c1 = 'B'
-# c2 = 'C'
-# msa = '{}_{}_{}_{}'.format(pdbid, c1, pdbid, c2)
-# out = scramble_sequence(msa, nr)
+# nr = 5
+# dimers = ['5WY5_B_5WY5_A', '5M72_A_5M72_B', '5L8H_B_5L8H_A', '5UNI_B_5UNI_A', '5F5S_A_5F5S_B', '5MU7_B_5MU7_A']
+# dimers = ["1EM8_D_1EM8_C", "1FM0_E_1FM0_D", "1KA9_H_1KA9_F", "1ZT2_A_1ZT2_B", "2NQ2_C_2NQ2_A", "2OXG_Z_2OXG_Y",
+#       "4NQW_A_4NQW_B", '5WY5_B_5WY5_A', '5M72_A_5M72_B', '5L8H_B_5L8H_A', '5UNI_B_5UNI_A', '5F5S_A_5F5S_B',
+#       '5MU7_B_5MU7_A']
+# pdbid = '1M56'
+# c1 = 'C'
+# c2 = 'D'
+# msa = '{}_{}_{}_{}_filtered_25'.format(pdbid, c1, pdbid, c2)
+# out = scramble_sequence(dimers[5], nr)

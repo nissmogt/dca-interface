@@ -1,17 +1,17 @@
+import os
+from dca_functions import cm_make
 import numpy as np
 import pandas as pd
-from distance_dca import distance_dca, read_dca_distance_matrix
 from distance_pdb import plot_cm
-from read_db import get_lengths
 from load_dca import load_dca_to_df
-from analysis_functions import plot_true_positives
+from process_coupling_matrix import process_coupling_matrix_output_scores, rank_hamming
 from output_pipeline import (
-    pipeline_distance_matrix, pipeline_mapping, pipeline_interface,
+    pipeline_pdb_distance_matrix, pipeline_mapping, pipeline_interface,
     pipeline_dca_distance
 )
 
 
-def run_analysis(msa_name, n_pairs, cutoff, results_dir, count=0):
+def run_analysis(msa_name, n_pairs, cutoff, results_dir, matrix, fni=False, plot=False):
     """
     PDB protocols:
                     1. Calculate or read distance matrix, plot it if needed (set plot=True).
@@ -23,43 +23,54 @@ def run_analysis(msa_name, n_pairs, cutoff, results_dir, count=0):
                     2. Load results from Matlab plmDCA script into a Dataframe, rank by top score,
                        and remove i,j pairs with sequence distance < 5.
                     3. Map DCA indices to PDB-distance-matrix indices
-                    4. Filter DCA pairs that lie on the interface
+                    4. Filter DCA pairs that lie on the pre-defined interface
     Plots:
                     1. PDB distance matrix (optional - see PDB protocol)
                     2. PDB distance matrix and DCA top [n_pairs]
-                    3. True positives vs. top [n_pairs]
-                    4. DCA score vs. PDB distance
 
+    :param matrix:
     :param msa_name:
     :param n_pairs:
     :param cutoff:
     :param results_dir:
-    :param count:
+    :param fni:
+    :param plot:
     :return:
     """
 
     # PDB PROTOCOL ====================================================================================================
     atom = 'aa'  # cutoff type aa: all-atom, ca: c-alpha
-    pdb_df_list, chain_lengths = pipeline_distance_matrix(msa_name, cutoff_type=atom, cutoff=cutoff,
-                                                          read=True, plot=False)
+    pdb_df_list, chain_lengths = pipeline_pdb_distance_matrix(msa_name, cutoff_type=atom, cutoff=cutoff,
+                                                              read=True, plot=False)
+    df_pdb = pdb_df_list[0]
     pdb_chain1_length = chain_lengths[0]
-    pdb_total_length = sum(chain_lengths)
+    pdb_total_length = chain_lengths[2]
 
     # DCA PROTOCOL ====================================================================================================
-    top_pairs = int(np.ceil(3 * pdb_chain1_length / 2.0))
-    print("\n3L_a/2 Pairs: |{}|\tN_pairs: {}".format(top_pairs, n_pairs))
-    uniprot_chain_lengths = get_lengths(msa_name)
 
-    df_dca_unmapped = load_dca_to_df(msa_name, results_dir)
-    df_dca_mapped = pipeline_mapping(msa_name, df_dca_unmapped, uniprot_chain_lengths)
-    df_dca_mapped_inter = pipeline_interface(df_dca_mapped, msa_name, pdb_chain1_length)
-    df_dca_mapped_inter = df_dca_mapped_inter[:n_pairs]
-    df_dca_mapped_inter_dist = pipeline_dca_distance(msa_name, df_dca_mapped_inter, atom, read=True, n_pairs=n_pairs)
+    if fni:
+        fni_matrix_dir = "scrambled_results\\fni_matrices\\"
+        npy_matrix = np.load("{}matrix_FNi_{}.npy".format(fni_matrix_dir, msa_name))
+        df_dca_mapped = cm_make(npy_matrix)
+
+    df_dca = process_coupling_matrix_output_scores(matrixFile=matrix, freqFile=False)
+    df_dca_ranked = rank_hamming(df_dca)
+    df_dca_mapped = pipeline_mapping(msa_name, df_dca_ranked, read=True, a2m=True)
+    df_dca_mapped_dist = df_dca_mapped.merge(df_pdb, how='inner', on=['i', 'j'])
 
     # PLOTS PROTOCOL ==================================================================================================
-    df_empty = pd.DataFrame({'A': []})  # an empty Dataframe to use in plot_cm if you dont want to plot dca
-    plot_cm(pdb_df_list, cutoff, pdb_chain1_length, pdb_total_length, atom=atom, df_dca=df_dca_mapped_inter,
-            msa_name=msa_name, other_dca=df_empty)
+    if plot:
+        df_plot = df_dca_mapped[:n_pairs]
+        df_empty = pd.DataFrame({'A': []})  # an empty Dataframe to use in plot_cm if you dont want to plot dca
 
-    return df_dca_mapped_inter_dist
+        folder = "C:\\Users\\kmehr\\OneDrive\\Documents\\phd_research\\images\\2020\\SEPT_2020\\"
+        img_dir = "{}{}".format(folder, results_dir)
+        if not os.path.exists(img_dir):
+            os.makedirs(img_dir)
+        imgName = '{}APC_{}_top{}'.format(img_dir, msa_name, n_pairs)
 
+        plot_cm(pdb_df_list, cutoff, pdb_chain1_length, pdb_total_length,
+                atom=atom, df_dca=df_plot, msa_name=msa_name,
+                other_dca=df_empty, img_name=imgName)
+
+    return df_dca_mapped_dist

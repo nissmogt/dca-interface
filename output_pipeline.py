@@ -1,4 +1,8 @@
-def pipeline_distance_matrix(msa_name, cutoff_type, cutoff, read=False, plot=False):
+import numpy as np
+import pandas as pd
+
+
+def pipeline_pdb_distance_matrix(msa_name, cutoff_type, cutoff, read=False, plot=False):
     """
     Used in calculating distance matrix for given msa input.
     :param msa_name: string - Name for MSA file should follow the following format 'PDBID_CHAIN1_PDBID_CHAIN2'
@@ -9,96 +13,87 @@ def pipeline_distance_matrix(msa_name, cutoff_type, cutoff, read=False, plot=Fal
     :param plot: boolean - Plot distance matrix at chosen cutoff using chosen cutoff type. (Default: False)
     :return: List of two pandas Dataframes. Monomer pairs and interface pairs.
     """
-    import numpy as np
-    import pandas as pd
-    from distance_pdb import distance_matrix, read_distance_matrix_file, plot_cm
+    from distance_pdb import distance_matrix, import_pdb_distance_matrix, plot_cm
     if cutoff_type == 'aa':
         all_atom = True
     else:
         all_atom = False
-
-    sifts_table_file = "databases/sifts/pdb_chain_uniprot_plus.csv"
-    s = pd.read_csv(sifts_table_file, comment="#")
-    pdbid = msa_name[:4].lower()
-    chain_1 = msa_name.split("_")[1]
-    chain_2 = msa_name.split("_")[3]
-
-    # it's possible to have multiple coord values per chain entry
-    pdb_start_chain_1 = s.query("pdb_id == @pdbid and pdb_chain == @chain_1").coord_start.values
-    pdb_start_chain_1 = np.array([int(i) for i in pdb_start_chain_1])
-    pdb_end_chain_1 = s.query("pdb_id == @pdbid and pdb_chain == @chain_1").coord_end.values
-    pdb_end_chain_1 = np.array([int(i) for i in pdb_end_chain_1])
-
-    pdb_start_chain_2 = s.query("pdb_id == @pdbid and pdb_chain == @chain_2").coord_start.values
-    pdb_start_chain_2 = np.array([int(i) for i in pdb_start_chain_2])
-    pdb_end_chain_2 = s.query("pdb_id == @pdbid and pdb_chain == @chain_2").coord_end.values
-    pdb_end_chain_2 = np.array([int(i) for i in pdb_end_chain_2])
-
+    chain1 = msa_name.split("_")[1]
+    chain2 = msa_name.split("_")[-1]
     # -- PDB --
-    print("\n\t-- |{}| DISTANCE MATRIX CALCULATION at |{}| inter-cutoff: |{}| --".format(pdbid, cutoff_type, cutoff))
+    print("\n\t-- |{}| DISTANCE MATRIX CALCULATION at |{}| inter-cutoff: |{}| --".format(msa_name, cutoff_type, cutoff))
     if read:
-        df_mon, df_inter, chain_lengths = read_distance_matrix_file(msa_name, all_atom=all_atom)
+        df_pdb = import_pdb_distance_matrix(msa_name, all_atom=all_atom)
     else:
-        df_pdb, df_mon, df_inter, chain_lengths = distance_matrix(msa_name, all_atom=all_atom)
+        df_pdb = distance_matrix(msa_name, all_atom=all_atom)
+
+    df_mon = df_pdb[df_pdb['chain_1'] == df_pdb['chain_2']]
+    df_inter = df_pdb[df_pdb['chain_1'] != df_pdb['chain_2']]
+    total_length = max(df_mon[df_mon["chain_2"] == chain2].j)
+    chain1_length = max(df_mon[df_mon["chain_1"] == chain1].j)
+    chain2_length = total_length - chain1_length
 
     df_mon = df_mon[df_mon["d"] <= 8.0]    # hard-coded monomer cutoff
     df_inter = df_inter[df_inter["d"] <= cutoff]
 
-    total_length = sum(chain_lengths)
-    print("\t||Chain {}\t||Chain {}\nlengths: {}\t||{}\t||Total length: {}".format(chain_1, chain_2, chain_lengths[0],
-                                                                                   chain_lengths[1], total_length))
-    # s = SIFTS("databases\\sifts\\pdb_chain_uniprot_plus.csv", "databases\\sifts\\pdb_chain_uniprot_plus.fa")
-    # monomer_1 = s.by_pdb_id(pdb_id=pdbid, pdb_chain=chain_1)
-    # monomer_2 = s.by_pdb_id(pdb_id=pdbid, pdb_chain=chain_2)
-    # mon_map_1 = monomer_1.mapping[0]
-    # mon_map_2 = monomer_2.mapping[0]
-    pdb_df_list = [df_mon, df_inter]
+    # total_length = sum(chain_lengths)
+    print("\t||Chain {}\t||Chain {}\nlengths: {}\t||{}\t||Total length: {}".format(chain1, chain2, chain1_length,
+                                                                                   chain2_length, total_length))
+    pdb_df_list = [df_pdb, df_mon, df_inter]
     if plot:
         df_empty = pd.DataFrame({'A': []})  # an empty Dataframe to use in plot_cm
-        plot_cm(pdb_df_list, cutoff=cutoff, length_a=chain_lengths[0], length=total_length, atom=cutoff_type,
-                df_dca=df_empty, msa_name=msa_name)
-    return pdb_df_list, chain_lengths
+        plot_cm(pdb_df_list[1:], cutoff=cutoff, length_a=chain1_length, length=total_length, atom=cutoff_type,
+                df_dca=df_empty, msa_name=msa_name, other_dca=df_empty)
+
+    return pdb_df_list, [chain1_length, chain2_length, total_length]
 
 
-def pipeline_mapping(msa_name, df_dca, uniprot_lengths, read=False):
+def pipeline_mapping(msa_name, df_dca, read=False, a2m=True):
     """
     Map DCA indices to PDB-distance-matrix indices
     :param read:
-    :param uniprot_lengths:
     :param df_dca:
     :param msa_name:
     :return:
     """
-    import pandas as pd
-    from parse_fasta import read_msa
+    from msa_functions import read_first_sequence_in_msa
+    from read_db import get_lengths
     from get_residues import get_residues
-    from mapping_functions import align_dca2pdb, apply_map
     from get_region import get_dca_indices
+    from mapping_functions import align_dca2pdb, apply_map
     print("(pipeline mapping)")
     if read:
-        import numpy as np
-        infile = "results\\reference_maps\\ref_map_{}.txt".format(msa_name.strip(".fas"))
-        map_pdb_dca = pd.read_csv(infile, delimiter="\t", header=0)
-        # P1: after running all systems remove line 83/4 (was only added to correct col names in align_dca2pdb line 25)
-        map_pdb_dca = map_pdb_dca.rename(columns={"dca_res": "dca_i", "dca_i": "dca_res"})
-        np.savetxt(infile, map_pdb_dca, header="pdb_i\tpdb_res\tdca_i\tdca_res", fmt="%s\t%s\t%s\t%s", comments='')
-        map_pdb_dca = map_pdb_dca.dropna()
+        infile = "reference_maps\\ref_map_{}.txt".format(msa_name.strip(".fas"))
+        map_pdb_dca = pd.read_csv(infile, delimiter="\t", header=0, dtype=str)
+        # map_pdb_dca = map_pdb_dca.replace("?", np.nan).dropna()    # some pdbs have unknown seq res UNK
+        # map_pdb_dca = pd.read_csv(infile, delimiter="\t", header=0, dtype=str, usecols=(0,1)) # used for HK-RR
+        # map_pdb_dca["#HMM"] = map_pdb_dca["#HMM"].astype(int) + 1 # used for HK-RR
+        # map_to_pdb = dict(zip(map_pdb_dca["#HMM"], map_pdb_dca["col"])) # used for HK-RR
+        map_pdb_dca = map_pdb_dca.replace("X", np.nan).dropna()    # some pdbs have unknown seq res UNK
         map_to_pdb = dict(zip(map_pdb_dca["dca_i"], map_pdb_dca["pdb_i"]))
 
     else:
-        _, dca_lengths, _ = get_dca_indices(msa_name, uniprot_lengths[0])
+        uniprot_lengths = get_lengths(msa_name)
+        if a2m:
+            _, dca_lengths, _ = get_dca_indices(msa_name, uniprot_lengths[0])
+        else:
+            dca_lengths = uniprot_lengths
 
         # -- GET MAP FROM MSA TO PDB --
         pdbseq_1, pdbseq_2 = get_residues(msa_name, seq=True)
         pdbseq = [pdbseq_1, pdbseq_2]
         # splits msa sequence based on modified uniprot lengths (removed lowercase)
-        msaseq = read_msa(msa_name, split=True, len_a=dca_lengths[0])
+        msaseq = read_first_sequence_in_msa(msa_name, split=True, len_a=dca_lengths[0])
 
         map_to_pdb = align_dca2pdb(msa_name, pdbseq, msaseq)
 
-    print("(map dictionary) {}".format(map_to_pdb))
+    # print("(map dictionary) {}".format(map_to_pdb))
     mapped_dca_array = apply_map(df_dca.to_numpy(), map_to_pdb)
-    df_dca_mapped = pd.DataFrame(mapped_dca_array, columns=['i', 'j', 'score'])
+    df_dca_mapped = pd.DataFrame(mapped_dca_array, columns=['i', 'j', 'fn_apc', 'fn', 'ui', 'uj'])
+    df_dca_mapped['i'] = df_dca_mapped['i'].astype(int)
+    df_dca_mapped['j'] = df_dca_mapped['j'].astype(int)
+    df_dca_mapped['ui'] = df_dca_mapped['ui'].astype(int)
+    df_dca_mapped['uj'] = df_dca_mapped['uj'].astype(int)
 
     return df_dca_mapped
 
@@ -111,13 +106,8 @@ def pipeline_interface(df_dca_mapped, msa_name, pdb_chain1_length):
     :param pdb_chain1_length:
     :return:
     """
-    import numpy as np
-    results_dir = "results\\"
-    outfile = "{}FN_{}_inter_mapped.txt".format(results_dir, msa_name)
     df_dca_mapped_inter = df_dca_mapped.loc[(df_dca_mapped["i"] < pdb_chain1_length) &
                                             (df_dca_mapped["j"] > pdb_chain1_length)]
-    np.savetxt(outfile, df_dca_mapped_inter, header="i\tj\tscore\t", fmt='%d\t%d\t%f', comments='')
-    # P2: add interface column to dca dataframe object i.e. "interface": y or n
     return df_dca_mapped_inter
 
 
@@ -133,28 +123,11 @@ def pipeline_dca_distance(msa_name, dca_df, atom, read=False, n_pairs=None):
     """
     from distance_dca import distance_dca, read_dca_distance_matrix
     if read:
-        df_dca_mapped_inter_dist = read_dca_distance_matrix(msa_name, n_pairs, atom=atom)
+        df_dca_dist = read_dca_distance_matrix(msa_name, n_pairs, atom=atom)
     else:
-        n_pairs = len(dca_df)
-        df_dca_mapped_inter_dist = distance_dca(dca_df, msa_name, atom=atom)
+        df_dca_dist = distance_dca(dca_df, msa_name, atom=atom)
 
-    return df_dca_mapped_inter_dist
-
-
-def pipeline_fni_scores(msa_name, read=False):
-    print("(pipeline_fni_scores)")
-    from dca_functions import average_jmatrix, read_matlab_matrix, calculate_fni_score
-    if read:
-        import pandas as pd
-        results_dir = "scrambled_results\\"
-        outfile = "{}FNi_apc_{}.txt".format(results_dir, msa_name)
-        return pd.read_csv(outfile, delimiter="\t", names=["i", "j", "score"])
-    else:
-        vanilla_dca_matrix = "results\\matrix_files\\matrix_ising_{}.fas.mat".format(msa_name)
-        avg_J = average_jmatrix(msa_name, 5)
-        h_paired, J_paired = read_matlab_matrix(vanilla_dca_matrix)
-        df_fni, df_fni_apc = calculate_fni_score(msa_name, J_paired, avg_J)
-        return df_fni_apc
+    return df_dca_dist
 
 
 def pipeline_confusion_matrix(msa_name, dca_df, pdb_df_list,
@@ -170,8 +143,6 @@ def pipeline_confusion_matrix(msa_name, dca_df, pdb_df_list,
     :param read:
     :return: Input DataFrame with added confusion matrix values.
     """
-    import numpy as np
-    import pandas as pd
     from analysis_functions import confusion_matrix_list
     from distance_pdb import vectorize_pdb_contacts
     print("Calculating confusion matrix ...")

@@ -1,31 +1,28 @@
 import numpy as np
 
 
-def cm_make(msa_name, score_matrix, apc=True):
+def cm_make(score_matrix, score):
     """
     Makes a contact map from a DCA score matrix file. Also maps dca indices to pdb.
     Rank by scores.
-    :param apc:
-    :param msa_name:
     :param score_matrix: Frobenius norm matrix
+    :param score:
     :return: Three-column dataframe composed of pair i, j, and fn score
     """
-    import os
     import pandas as pd
-    fname = "(cm_make)"
-    results = "scrambled_results\\"
     L = score_matrix.shape[0]
     dca_scores = []
     for i in range(L - 1):
         for j in range(i + 1, L):
-            dca_scores.append([i+1, j+1, score_matrix[i, j]])
-    df_dca = pd.DataFrame(np.array(dca_scores), columns=["i", "j", "score"])
-    df_dca = df_dca.sort_values(ascending=False, by=["score"])
-    df_dca = df_dca[abs(df_dca["i"] - df_dca["j"]) > 5]    # ensure sequence separation of 5
-    if not apc:
-        np.savetxt('{}FNi_{}.txt'.format(results, msa_name), df_dca, delimiter='\t')
-    else:
-        np.savetxt('{}FNi_apc_{}.txt'.format(results, msa_name), df_dca, delimiter='\t')
+            dca_scores.append([int(i+1), int(j+1), score_matrix[i, j]])    # added 1 to indices since they start from 0
+    if score == 'fn':
+        df_dca = pd.DataFrame(np.array(dca_scores), columns=["i", "j", score])
+    if score == 'di':
+        df_dca = pd.DataFrame(np.array(dca_scores), columns=["i", "j", score])
+    if score == 'fn_apc':
+        df_dca = pd.DataFrame(np.array(dca_scores), columns=["i", "j", score])
+    if score == 'di_apc':
+        df_dca = pd.DataFrame(np.array(dca_scores), columns=["i", "j", score])
     return df_dca
 
 
@@ -83,13 +80,16 @@ def read_matlab_matrix(filein):
 def average_jmatrix(msa_name, nReplicates):
     # Function that averages over coupling matrices.
     # initialize coupling sum to zero
-    sum_couplings = 0.0
+    sum_couplings = []
     resultDir = "scrambled_results\\"
+    print("(average_jmatrix)")
     for i in range(nReplicates):
         dca_matrix = "{}matrix_ising_{}_rep{}_scrambled.fas.mat".format(resultDir, msa_name, i)
         fields, couplings = read_matlab_matrix(dca_matrix)
-        sum_couplings += couplings
-    average_couplings = sum_couplings / nReplicates
+        sum_couplings.append(couplings)
+    average_couplings = sum(sum_couplings) / nReplicates
+    outfile = "scrambled_results\\{}_avg_rep{}_matrix.npy".format(msa_name, nReplicates)
+    np.save(outfile, average_couplings)
     return average_couplings
 
 

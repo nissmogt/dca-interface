@@ -2,8 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from plot_cm import plot_cm
-from sasa_calc import tpr_dca_sasa, sasa_filter, draw_sasa_res, draw_dca_sasa, sasa_affect_plot
-from make_distance_matrix_dca_map import vectorize_pdb_contacts, vectorize_dca_contacts, tpr_top_pairs
 
 pdb_file = 'files\\XDHB_XDHC\\pdb\\3hrd_CD_pdbfixed.pdb'
 dca_file = 'files\\XDHB_XDHC\\map_cm_XDHB_XDHC.txt'

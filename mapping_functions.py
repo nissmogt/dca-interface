@@ -44,14 +44,17 @@ def apply_map(array, map_pdb_dca):
     print("(apply_map)")
 
     map_dca_list = []
-    for i, j, score in array:
+    for i, j, fn_apc, fn in array:
         i = int(i)
         j = int(j)
+        # if i in map_pdb_dca.keys() and j in map_pdb_dca.keys():
         if str(i) in map_pdb_dca.keys() and str(j) in map_pdb_dca.keys():
             map_index_i = int(map_pdb_dca[str(i)])
             map_index_j = int(map_pdb_dca[str(j)])
+            # map_index_i = int(map_pdb_dca[i])
+            # map_index_j = int(map_pdb_dca[j])
             if map_index_i and map_index_j >= 0:
-                map_dca_list.append([map_index_i, map_index_j, score])
+                map_dca_list.append([map_index_i, map_index_j, fn_apc, fn, i, j])
 
     return np.array(map_dca_list)
 

@@ -7,15 +7,15 @@ import argparse
 # import matlab.engine
 
 ### DIRECTORIES ###
-projectdir = '/home/kmm5/dca_interface/'
-msadir = '/home/kmm5/dca_interface/PDB_benchmark_1/'
-resultsdir = '/scratch/kmm5/benchmark_results_1/'
-plmdir = '/home/kmm5/plm-code/'
+# projectdir = '/home/kmm5/dca_interface/'
+# msadir = '/home/kmm5/dca_interface/PDB_benchmark_1/'
+# resultsdir = '/scratch/kmm5/benchmark_results_1/'
+# plmdir = '/home/kmm5/plm-code/'
 # mfdir = '/home/kmm5/mfdca/'
 
-### FILES ###
-gene_list = '/home/kmm5/dca_interface/gene_list.csv'
-complex_list = '/home/kmm5/dca_interface/complex_list.csv'
+## FILES ###
+# gene_list = '/home/kmm5/dca_interface/gene_list.csv'
+# complex_list = '/home/kmm5/dca_interface/complex_list.csv'
 
 
 def process_id_chain_list(length_list):
